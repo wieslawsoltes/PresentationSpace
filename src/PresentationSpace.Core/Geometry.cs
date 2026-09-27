@@ -48,8 +48,8 @@ public static partial class Geometry
         float h = original.Height + (top ? -delta.Y : bottom ? delta.Y : 0);
         if (keepAspect)
         {
-            float sx = w / original.Width, sy = h / original.Height;
-            float scale = !(left || right) ? sy : !(top || bottom) ? sx : Math.Abs(sx - 1) >= Math.Abs(sy - 1) ? sx : sy;
+            // Preserve the original horizontal-driven corner contract; vertical side handles use vertical movement.
+            float scale = left || right ? w / original.Width : h / original.Height;
             scale = Math.Max(scale, Math.Max(8 / original.Width, 8 / original.Height));
             w = original.Width * scale; h = original.Height * scale;
         }

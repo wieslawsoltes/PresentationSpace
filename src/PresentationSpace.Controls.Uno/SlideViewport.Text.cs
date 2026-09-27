@@ -33,13 +33,12 @@ public sealed partial class SlideViewport
         if (_textSelection is { Length: > 0 } selection && selection.SlideId == session.CurrentSlide.Id && session.Selection.Count == 1 && session.PrimaryShape is { Locked: false } shape && selection.ShapeId == shape.Id)
         {
             int start = Math.Min(selection.Start, shape.Text.Length), length = Math.Min(selection.Length, shape.Text.Length - start);
-            // TextBox uses UTF-16 indexes; never create a range in the middle of a surrogate pair.
             while (!RichText.IsBoundary(shape.Text, start)) start--;
             int end = Math.Min(shape.Text.Length, selection.Start + length);
             while (!RichText.IsBoundary(shape.Text, end)) end++;
             session.Apply(label, value => RichText.Format(value, start, end - start, format));
         }
-        else session.Apply(label, shape => shape with { TextStyle = format(shape.TextStyle), TextRanges = shape.TextRanges.Select(range => range with { Style = format(range.Style) }).ToImmutableArray() });
+        else session.Apply(label, value => value with { TextStyle = format(value.TextStyle), TextRanges = value.TextRanges.Select(range => range with { Style = format(range.Style) }).ToImmutableArray() });
         Refresh();
     }
 }
