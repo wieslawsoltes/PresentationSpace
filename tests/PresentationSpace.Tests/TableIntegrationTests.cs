@@ -60,12 +60,13 @@ public sealed class TableIntegrationTests
         Assert.Throws<InvalidDataException>(() => session.ReplaceText("a", new string('x', TableModel.MaxTextLength + 1)));
         Assert.Same(shape, session.CurrentSlide.Shapes[0]); Assert.False(session.CanUndo);
     }
-    [Fact] public void StandaloneTableRenderingUsesTheSamePipelineAndRestoresState()
+    [Theory, InlineData(false, "#00FF00"), InlineData(true, "#F1F4F8")]
+    public void StandaloneTableRenderingUsesTheSamePipelineAndRestoresState(bool bandedRows, string expectedColor)
     {
-        var table = TableModel.Create(1, 2) with { HeaderRow = false, BodyFill = "#00FF00" };
+        var table = TableModel.Create(1, 2) with { HeaderRow = false, BandedRows = bandedRows, BodyFill = "#00FF00" };
         using var surface = SKSurface.Create(new SKImageInfo(600, 300)); using var renderer = new SlideRenderer(); surface.Canvas.Translate(10, 10); var matrix = surface.Canvas.TotalMatrix; var count = surface.Canvas.SaveCount;
         renderer.RenderTable(surface.Canvas, table, new(0, 0, 500, 200)); Assert.Equal(matrix, surface.Canvas.TotalMatrix); Assert.Equal(count, surface.Canvas.SaveCount);
-        using var image = surface.Snapshot(); using var bitmap = SKBitmap.FromImage(image); Assert.Equal(SKColors.Lime, bitmap.GetPixel(100, 100));
+        using var image = surface.Snapshot(); using var bitmap = SKBitmap.FromImage(image); Assert.Equal(SKColor.Parse(expectedColor), bitmap.GetPixel(100, 100));
         Assert.Throws<ArgumentOutOfRangeException>(() => renderer.RenderTable(surface.Canvas, table, new(0, 0, float.NaN, 200)));
     }
     [Fact] public void EmptyCellParagraphDefaultsRoundTrip()
