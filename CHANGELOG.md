@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0 — development preview
+
+### Added
+
+- Immutable multi-series categorical charts: column, horizontal bar, line, area, pie and doughnut.
+- Clustered/stacked/100% stacked bar and column modes, nullable missing data and Gap/Zero/Span policies.
+- Reusable Uno chart data editor with bounded quoted TSV, series management/colors, title, background, legend/data-label options and doughnut hole size.
+- Native PPTX chart parts and editable embedded XLSX workbooks for all supported series/types, including sparse caches and columns beyond Z.
+- Schema-2 native chart serialization with backward reading of existing documents.
+- Independent schemas, round trips, malformed-cache limits, data parsing, numeric edge cases, pixel regressions and actual browser chart workflows.
+
+### Fixed
+
+- Missing values no longer silently become zero on supported native chart import.
+- New charts use readable insertion bounds and a white chart area rather than showing unrelated objects through the graph.
+- Complete single-slice circle/ring geometry and normalized axes for subnormal values.
+- Area charts no longer draw line-chart markers. Canvas state is restored after chart rendering.
+- Shape Fill and theme accents update chart colors without discarding series or missing data; locked chart editing is disabled.
+
+### Boundaries
+
+Chart axes/point styles and Office layout remain simplified. There is no combination/scatter/bubble/3D support, stacked line/area, negative percentage stacking, external workbook execution or spreadsheet-grid editor. Complete master/theme inheritance, WYSIWYG rich input, merged tables, media, advanced timelines, secure coauthoring and accessibility qualification remain unfinished.
+
 ## 0.2.0 — development preview
 
 ### Added

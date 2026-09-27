@@ -22,6 +22,7 @@ public sealed record ChartSpec
     public ChartGrouping Grouping { get; init; }
     public ChartBlankMode Blanks { get; init; }
     public string Title { get; init; } = "";
+    public string Background { get; init; } = "#FFFFFF";
     public bool ShowLegend { get; init; } = true;
     public bool ShowValues { get; init; }
     public int HoleSize { get; init; } = 55;
@@ -45,7 +46,7 @@ public static class ChartModel
         var values = shape.Values.IsDefaultOrEmpty ? ImmutableArray.Create(42f, 68f, 54f, 89f) : shape.Values;
         return new()
         {
-            ShowLegend = false, ShowValues = true,
+            ShowLegend = false, ShowValues = true, Background = "#00000000",
             Categories = values.Select((_, i) => i < shape.Labels.Length ? shape.Labels[i] : (i + 1).ToString(CultureInfo.InvariantCulture)).ToImmutableArray(),
             Series = [new() { Name = shape.Name, Color = shape.Fill, Values = values.Select(v => (double?)v).ToImmutableArray() }]
         };
@@ -67,7 +68,7 @@ public static class ChartModel
     {
         ArgumentNullException.ThrowIfNull(c);
         if (!Enum.IsDefined(c.Kind) || !Enum.IsDefined(c.Grouping) || !Enum.IsDefined(c.Blanks)) throw new InvalidDataException("Unknown chart type, grouping or blank-data policy.");
-        if (c.Title is null || c.Title.Length > 32767 || c.HoleSize is < 10 or > 90) throw new InvalidDataException("Invalid chart title or doughnut hole size.");
+        if (c.Title is null || c.Title.Length > 32767 || !ValidColor(c.Background) || c.HoleSize is < 10 or > 90) throw new InvalidDataException("Invalid chart title or doughnut hole size.");
         if (c.Categories.IsDefaultOrEmpty || c.Categories.Length > MaxCategories || c.Categories.Any(x => x is null || x.Length > 32767)) throw new InvalidDataException("Charts require 1–10,000 category labels, each at most 32,767 characters.");
         if (c.Series.IsDefaultOrEmpty || c.Series.Length > MaxSeries || (long)c.Series.Length * c.Categories.Length > MaxValues) throw new InvalidDataException("Charts support at most 32 series and 100,000 values.");
         if (c.Grouping != ChartGrouping.Clustered && c.Kind is not (ChartKind.Column or ChartKind.Bar)) throw new InvalidDataException("Stacking is supported for column and bar charts only.");

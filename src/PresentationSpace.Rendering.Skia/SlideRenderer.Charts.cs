@@ -19,6 +19,7 @@ public sealed partial class SlideRenderer
         {
             canvas.ClipRect(new(bounds.X, bounds.Y, bounds.Right, bounds.Bottom));
             canvas.Translate(bounds.X, bounds.Y); canvas.Scale(bounds.Width / 640, bounds.Height / 360);
+            using (var background = new SKPaint { Color = Color(chart.Background) }) canvas.DrawRect(0, 0, 640, 360, background);
             var style = textStyle with { FontSize = 12, Bold = false, Bullets = false, Alignment = ParagraphAlignment.Center, VerticalAlignment = Core.VerticalAlignment.Middle };
             void Text(string value, RectF rectangle, ParagraphAlignment alignment = ParagraphAlignment.Center, bool bold = false, float size = 12) => DrawText(canvas, value, rectangle, style with { Alignment = alignment, Bold = bold, FontSize = size }, 2);
             float top = string.IsNullOrEmpty(chart.Title) ? 12 : 42;

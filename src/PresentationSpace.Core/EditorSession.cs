@@ -87,7 +87,12 @@ public sealed class EditorSession
     public void Apply(string label, Func<SlideShape, SlideShape> edit)
     {
         if (Selection.Count == 0) return;
-        EditSlide(label, s => s with { Shapes = s.Shapes.Select(x => Selection.Contains(x.Id) && !x.Locked ? edit(x) : x).ToImmutableArray() });
+        EditSlide(label, s => s with { Shapes = s.Shapes.Select(x => Selection.Contains(x.Id) && !x.Locked ? ReconcileChartFill(x, edit(x)) : x).ToImmutableArray() });
+    }
+    private static SlideShape ReconcileChartFill(SlideShape before, SlideShape after)
+    {
+        if (before.Kind != ShapeKind.Chart || after.Kind != ShapeKind.Chart || before.Chart is not { } chart || !ReferenceEquals(chart, after.Chart) || before.Fill == after.Fill) return after;
+        return ChartModel.Apply(after, chart with { Series = chart.Series.SetItem(0, chart.Series[0] with { Color = after.Fill }) });
     }
     public void BeginGesture() { if (_gesture is null) _gesture = Capture(); }
     public void PreviewShapes(Func<SlideShape, SlideShape> edit)
@@ -125,6 +130,19 @@ public sealed class EditorSession
     public void Insert(SlideShape shape) { EditSlide("Insert " + shape.Kind, s => s with { Shapes = s.Shapes.Add(shape) }); Select(shape.Id); }
     public void Insert(ShapeKind kind)
     {
+        if (kind == ShapeKind.Chart)
+        {
+            Insert(ChartModel.Apply(new SlideShape
+            {
+                Name = "Chart " + (CurrentSlide.Shapes.Length + 1),
+                Bounds = new(Document.Width * .2f, Document.Height * .3f, Document.Width * .6f, Document.Height * .6f)
+            }, new ChartSpec
+            {
+                Title = "Chart title", Categories = ["Q1", "Q2", "Q3", "Q4"],
+                Series = [new() { Name = "Series 1", Values = [42, 68, 54, 89] }]
+            }));
+            return;
+        }
         float x = Document.Width * 0.28f, y = Document.Height * 0.3f;
         Insert(new SlideShape { Kind = kind, Name = kind + " " + (CurrentSlide.Shapes.Length + 1), Bounds = new(x,y,kind == ShapeKind.Text ? 500 : 320,kind == ShapeKind.Text ? 90 : 190), Text = kind == ShapeKind.Text ? "Your text here" : "", Fill = kind == ShapeKind.Text || kind is ShapeKind.Line or ShapeKind.Arrow ? "#00000000" : "#D35230", Stroke = kind is ShapeKind.Line or ShapeKind.Arrow ? "#D35230" : "#00000000", StrokeWidth = kind is ShapeKind.Line or ShapeKind.Arrow ? 4 : 1.5f,
             Cells = kind == ShapeKind.Table ? ["Category","Value","Change","Product A","125","+12%","Product B","98","+8%","Product C","156","+24%"] : [], Values = kind == ShapeKind.Chart ? [42,68,54,89] : [], Labels = kind == ShapeKind.Chart ? ["Q1","Q2","Q3","Q4"] : [] });

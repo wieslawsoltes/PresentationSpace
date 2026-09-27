@@ -44,6 +44,13 @@ public static class SlideFactory
     {
         string accent = name switch { "Ocean" => "#187EAB", "Forest" => "#287D61", "Violet" => "#7654B3", "Slate" => "#53657D", _ => "#D35230" };
         string old = d.Theme switch { "Ocean" => "#187EAB", "Forest" => "#287D61", "Violet" => "#7654B3", "Slate" => "#53657D", _ => "#D35230" };
-        return d with { Theme = name, Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => x with { Fill = x.Fill == old ? accent : x.Fill, TextStyle = x.TextStyle with { Color = x.TextStyle.Color == old ? accent : x.TextStyle.Color } }).ToImmutableArray() }).ToImmutableArray() };
+        SlideShape Retheme(SlideShape shape)
+        {
+            var result = shape with { Fill = shape.Fill == old ? accent : shape.Fill, TextStyle = shape.TextStyle with { Color = shape.TextStyle.Color == old ? accent : shape.TextStyle.Color } };
+            if (shape.Chart is { } chart)
+                result = ChartModel.Apply(result, chart with { Series = chart.Series.Select(series => series.Color == old ? series with { Color = accent } : series).ToImmutableArray() });
+            return result;
+        }
+        return d with { Theme = name, Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(Retheme).ToImmutableArray() }).ToImmutableArray() };
     }
 }

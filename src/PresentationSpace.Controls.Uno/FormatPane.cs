@@ -49,7 +49,7 @@ public sealed class FormatPane : SessionControl
                 Section("Chart design");
                 if(s.Selection.Count==1)
                 {
-                    _chartEditor=new ChartDataEditor();_chartEditor.SetValue(ChartModel.Get(shape));
+                    _chartEditor=new ChartDataEditor{IsEnabled=!shape.Locked};_chartEditor.SetValue(ChartModel.Get(shape));
                     var id=shape.Id;
                     _chartEditor.ValueChanged+=(_,chart)=>s.EditSlide("Edit chart",slide=>slide with{Shapes=slide.Shapes.Select(x=>x.Id==id&&!x.Locked?ChartModel.Apply(x,chart):x).ToImmutableArray()});
                     _body.Children.Add(_chartEditor);

@@ -32,10 +32,12 @@ public sealed class ChartDataEditor : UserControl
         var body = new StackPanel { Spacing = 9 };
         body.Children.Add(_kind); body.Children.Add(_grouping); body.Children.Add(_title);
         body.Children.Add(_legend); body.Children.Add(_values); body.Children.Add(_blanks); body.Children.Add(_hole);
-        body.Children.Add(new TextBlock { Text = "Paste tab-separated cells: category labels in the first column, series names in the first row. Blank numbers remain missing. Quotes preserve tabs and line breaks inside labels. Apply commits the title, hole size and data; closing the pane discards unapplied changes.", TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = OfficePalette.Muted });
+        body.Children.Add(new TextBlock { Text = "Paste category + series columns. Empty numbers stay missing. Apply commits data, title and hole size before leaving the pane.", TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = OfficePalette.Muted });
         body.Children.Add(_data); body.Children.Add(_error);
         var apply = new Button { Content = "Apply chart data", HorizontalAlignment = HorizontalAlignment.Stretch };
         AutomationProperties.SetName(apply, "Apply chart data"); apply.Click += (_, _) => Update(c => c); body.Children.Add(apply);
+        body.Children.Add(new TextBlock { Text = "Chart background", FontSize = 12 });
+        var background = new ColorPalette(); background.ColorSelected += (_, color) => Update(c => c with { Background = color }); body.Children.Add(background);
         body.Children.Add(_series); var palette = new ColorPalette(); body.Children.Add(palette);
         var add = new Button { Content = "Add series", HorizontalAlignment = HorizontalAlignment.Stretch };
         var remove = new Button { Content = "Remove selected series", HorizontalAlignment = HorizontalAlignment.Stretch };

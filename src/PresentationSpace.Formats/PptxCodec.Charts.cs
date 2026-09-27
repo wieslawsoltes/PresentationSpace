@@ -64,7 +64,7 @@ public static partial class PptxCodec
         chart.Add(ChartValue("autoTitleDeleted", string.IsNullOrEmpty(spec.Title) ? 1 : 0), plot);
         if (spec.ShowLegend) chart.Add(new XElement(C + "legend", ChartValue("legendPos", "b"), ChartValue("overlay", 0)));
         chart.Add(ChartValue("plotVisOnly", 1), ChartValue("dispBlanksAs", spec.Blanks switch { ChartBlankMode.Zero => "zero", ChartBlankMode.Span => "span", _ => "gap" }), ChartValue("showDLblsOverMax", 0));
-        var root = new XElement(C + "chartSpace", new XAttribute(XNamespace.Xmlns + "c", C), new XAttribute(XNamespace.Xmlns + "a", A), new XAttribute(XNamespace.Xmlns + "r", R), ChartValue("date1904", 0), ChartValue("lang", "en-US"), ChartValue("roundedCorners", 0), chart, new XElement(C + "externalData", new XAttribute(R + "id", "rIdWorkbook"), ChartValue("autoUpdate", 0)));
+        var root = new XElement(C + "chartSpace", new XAttribute(XNamespace.Xmlns + "c", C), new XAttribute(XNamespace.Xmlns + "a", A), new XAttribute(XNamespace.Xmlns + "r", R), ChartValue("date1904", 0), ChartValue("lang", "en-US"), ChartValue("roundedCorners", 0), chart, new XElement(C + "spPr", Fill(spec.Background, shape.Opacity)), new XElement(C + "externalData", new XAttribute(R + "id", "rIdWorkbook"), ChartValue("autoUpdate", 0)));
         WriteXml(zip, chartPath, root);
         WriteXml(zip, $"ppt/charts/_rels/{stem}.xml.rels", Relations([Relation("rIdWorkbook", "package", $"../embeddings/{stem}.xlsx")]));
         using (var stream = zip.CreateEntry(workbookPath).Open()) stream.Write(ChartWorkbook(spec));
@@ -185,7 +185,7 @@ public static partial class PptxCodec
         string? blank = (string?)chart?.Element(C + "dispBlanksAs")?.Attribute("val");
         var spec = new ChartSpec
         {
-            Kind = kind, Grouping = grouping, Title = titleText, ShowLegend = chart?.Element(C + "legend") is not null,
+            Kind = kind, Grouping = grouping, Title = titleText, Background = color(root.Element(C + "spPr"), "#FFFFFF"), ShowLegend = chart?.Element(C + "legend") is not null,
             ShowValues = Flag(type.Element(C + "dLbls"), "showVal") || Flag(type.Element(C + "dLbls"), "showPercent"),
             HoleSize = ChartInteger(type.Element(C + "holeSize"), "val", 55, 90),
             Blanks = blank switch { "zero" => ChartBlankMode.Zero, "span" => ChartBlankMode.Span, _ => ChartBlankMode.Gap },
