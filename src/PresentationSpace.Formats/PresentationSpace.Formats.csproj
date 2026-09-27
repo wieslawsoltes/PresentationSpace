@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><Description>Bounded, dependency-free PresentationML import and editable PowerPoint export.</Description></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../PresentationSpace.Core/PresentationSpace.Core.csproj" /></ItemGroup>
+</Project>
