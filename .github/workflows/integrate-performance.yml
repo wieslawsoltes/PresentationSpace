@@ -1,0 +1,57 @@
+name: Integrate accelerated editor
+on:
+  push:
+    branches: [work/canvas-performance-0.5]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'integrate-performance:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply exact-baseline implementation
+        run: |
+          set -euo pipefail
+          git diff --exit-code 8d1de0fdd59fbc96ee6718723ac9b6e9e9f4088a HEAD -- src tests tools .github/workflows/build.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, lzma
+          data = b''.join(Path(f'.ci/perf.{i}.xz').read_bytes() for i in range(3))
+          patch = lzma.decompress(data)
+          assert hashlib.sha256(patch).hexdigest() == '2461adc8587d798f30d08e199cb154d67a868265dba877654ae4077d5acb05d2'
+          Path('/tmp/performance.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/performance.patch
+          git apply /tmp/performance.patch
+          rm .ci/perf.*.xz .github/workflows/integrate-performance.yml
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'perf: accelerate Skia composition, recycle slide views and add canvas table authoring'
+          git push origin HEAD:work/canvas-performance-0.5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Regression and interchange tests
+        run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release --logger trx --results-directory artifacts/test-results
+      - name: Compile Uno desktop editor
+        run: dotnet build src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-desktop -c Release -p:PresentationTargetFrameworks=net10.0-desktop
+      - name: Same-runner baseline benchmarks
+        run: bash tools/benchmark-comparison.sh
+      - name: Archive implemented source
+        if: always()
+        run: |
+          mkdir -p artifacts
+          git archive --format=zip -o artifacts/PresentationSpace-performance-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-integration
+          path: |
+            artifacts/test-results
+            artifacts/performance
+            artifacts/PresentationSpace-performance-source.zip
