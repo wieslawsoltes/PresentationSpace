@@ -26,8 +26,8 @@ public sealed partial class PresentationEditor
 
     private void HandleGlobalEditingKey(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Handled || _busy || IsPresenting || !Key(VirtualKey.Control) || Key(VirtualKey.Menu)) return;
-        if (FocusManager.GetFocusedElement(XamlRoot) is TextBox or PasswordBox or AutoSuggestBox) return;
+        if (e.Handled || _busy || IsPresenting || !Key(VirtualKey.Control) || Key(VirtualKey.Menu) || XamlRoot is not { } root) return;
+        if (FocusManager.GetFocusedElement(root) is TextBox or PasswordBox or AutoSuggestBox) return;
         switch (e.Key)
         {
             case VirtualKey.Z: FlushEdits(); if (Key(VirtualKey.Shift)) Session.Redo(); else Session.Undo(); break;

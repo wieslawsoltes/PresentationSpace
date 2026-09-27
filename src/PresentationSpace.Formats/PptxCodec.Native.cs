@@ -9,6 +9,7 @@ namespace PresentationSpace.Formats;
 public static partial class PptxCodec
 {
     private const int MaxChartPoints = 10000;
+    private const string TableGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/table";
     private static XElement Placeholder(SlideShape shape) => new(P + "ph", V("type", shape.Placeholder switch
     {
         PlaceholderKind.Title => "title", PlaceholderKind.Subtitle => "subTitle", PlaceholderKind.Body => "body",
@@ -118,7 +119,7 @@ public static partial class PptxCodec
             }
             table.Add(tr);
         }
-        return GraphicFrame(shape, id, table, A.NamespaceName + "/table");
+        return GraphicFrame(shape, id, table, TableGraphicDataUri);
     }
 
     private static XElement ChartData(string tag, string formula, IEnumerable<string> values, bool numeric)
