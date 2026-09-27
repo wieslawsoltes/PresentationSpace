@@ -20,7 +20,7 @@ jobs:
           from pathlib import Path
           import hashlib, lzma
           patch = lzma.decompress(Path('.ci/docs.xz').read_bytes())
-          assert hashlib.sha256(patch).hexdigest() == '8b768db2399245b841722c47f55757160daf49e9b4e84562f4297b1cd7ae52706'
+          assert hashlib.sha256(patch).hexdigest() == '02f7b02fbc61e49f1166405e35cd86f84d85f6f8c5f79755f747fb1bd39dd9a2'
           Path('/tmp/docs.patch').write_bytes(patch)
           PY
           git apply --check /tmp/docs.patch
