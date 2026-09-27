@@ -8,7 +8,7 @@ public sealed partial class SlideViewport
     private void RestoreNativeCanvasFocus(object sender, RoutedEventArgs e)
     {
 #if __WASM__
-        if (!HasTableCellSelection || _cellEditor is not null || XamlRoot is not { } root ||
+        if (ActiveTable is null || _cellEditor is not null || XamlRoot is not { } root ||
             !ReferenceEquals(FocusManager.GetFocusedElement(root), this)) return;
         // Uno detaches its native text input in a microtask. Keep browser focus aligned
         // with this already-focused canvas after that detach. Otherwise the first Tab
