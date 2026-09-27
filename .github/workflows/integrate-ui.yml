@@ -23,9 +23,9 @@ jobs:
           assert hashlib.sha256(patch).hexdigest() == 'a22fddfddd9c801d4fdcc2c8089150a0d8d1c4fcb093d444a3aaf49611c25237'
           Path('/tmp/ui.patch').write_bytes(patch)
           PY
-          git apply --check /tmp/ui.patch
-          git apply /tmp/ui.patch
-          rm .ci/ui.0 .ci/ui.1 .ci/ui.2 .ci/ui.3 .github/workflows/integrate-ui.yml
+          git apply --check --exclude=.github/workflows/pages.yml /tmp/ui.patch
+          git apply --exclude=.github/workflows/pages.yml /tmp/ui.patch
+          rm .ci/ui.0 .ci/ui.1 .ci/ui.2 .ci/ui.3
           rmdir .ci
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
