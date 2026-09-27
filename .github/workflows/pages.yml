@@ -20,7 +20,7 @@ jobs:
       - name: Install WebAssembly workload
         run: dotnet workload install wasm-tools --skip-manifest-update
       - name: Publish Uno WebAssembly application
-        run: dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-browserwasm -c Release -p:TargetFrameworks=net10.0-browserwasm -p:WasmShellWebAppBasePath=/PresentationSpace/ -o artifacts/browser
+        run: dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-browserwasm -c Release -p:PresentationTargetFrameworks=net10.0-browserwasm -p:WasmShellWebAppBasePath=/PresentationSpace/ -o artifacts/browser
       - name: Prepare Pages distribution
         run: python3 tools/prepare-pages.py artifacts/browser artifacts/site
       - uses: actions/upload-artifact@v4
