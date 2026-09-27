@@ -54,7 +54,7 @@ public sealed partial class SlideRenderer
                     }
                     foreach (var piece in word)
                     {
-                        if (piece.Width <= width) { Add(piece); continue; }
+                        if (piece.Width <= width) { if (used > 0 && used + piece.Width > width) Finish(); Add(piece); continue; }
                         var elements = StringInfo.GetTextElementEnumerator(piece.Text);
                         while (elements.MoveNext())
                         {

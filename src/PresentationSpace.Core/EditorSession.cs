@@ -168,6 +168,6 @@ public sealed class EditorSession
     public void ReplaceText(string find, string replacement)
     {
         if (string.IsNullOrEmpty(find)) return;
-        EditDocument("Replace text", d => d with { Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => x with { Text = x.Text.Replace(find,replacement,StringComparison.OrdinalIgnoreCase) }).ToImmutableArray() }).ToImmutableArray() });
+        EditDocument("Replace text", d => d with { Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => RichTextEditing.ReplaceAll(x, find, replacement)).ToImmutableArray() }).ToImmutableArray() });
     }
 }

@@ -76,10 +76,10 @@ public sealed partial class PresentationEditor : UserControl
     private void OnSessionChanged(object? sender,EditorChangedEventArgs e)
     {
         _syncing=true;_documentName.Text=Session.Document.Title;_saveState.Text=Session.IsDirty?"• Edited":"✓";
-        if(_fontFamily is not null)_fontFamily.SelectedItem=(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle).FontFamily??"Arial";
-        if(_fontSize is not null)_fontSize.SelectedItem=((Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle).FontSize??28).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
+        if(_fontFamily is not null)_fontFamily.SelectedItem=(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.FontFamily??"Arial";
+        if(_fontSize is not null)_fontSize.SelectedItem=((Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.FontSize??28).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
         void Mark(RibbonCommandButton? button,bool active){if(button is not null)button.Background=active?OfficePalette.Brush("F4D9CC"):OfficePalette.Brush("00FFFFFF");}
-        Mark(_bold,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle).Bold==true);Mark(_italic,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle).Italic==true);Mark(_underline,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle).Underline==true);_syncing=false;
+        Mark(_bold,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Bold==true);Mark(_italic,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Italic==true);Mark(_underline,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Underline==true);_syncing=false;
         if(!e.IsPreview&&!ReferenceEquals(_observed,Session.Document)){_observed=Session.Document;if(_autoSave&&Storage is not null){_recoveryTimer.Stop();_recoveryTimer.Start();_status.Message="Saving local recovery…";}}
         _status.SetZoom(Viewport.Zoom);
     }
