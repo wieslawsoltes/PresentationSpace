@@ -1,0 +1,28 @@
+name: Integrate native canvas focus handoff
+on:
+  push:
+    branches: [work/canvas-performance-0.5]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'canvas-focus:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Connect verified canvas focus handoff
+        run: |
+          set -euo pipefail
+          git diff --exit-code b6120fde4bce42490985784a22961bcd205fa881 HEAD -- src/PresentationSpace.Controls.Uno/SlideViewport.cs tools/browser-performance.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/PresentationSpace.Controls.Uno/SlideViewport.cs');s=p.read_text();old='        PreviewKeyDown += HandleTablePreviewKey;';assert s.count(old)==1;p.write_text(s.replace(old,'        GotFocus += RestoreNativeCanvasFocus;\n'+old))
+          p=Path('tools/browser-performance.py');s=p.read_text();old='input:{tag:document.activeElement?.tagName,value:';assert s.count(old)==1;p.write_text(s.replace(old,'input:{id:document.activeElement?.id,tag:document.activeElement?.tagName,value:'))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/PresentationSpace.Controls.Uno/SlideViewport.cs tools/browser-performance.py
+          git commit -m 'fix(browser): align native focus after committing table-cell input'
+          git push origin HEAD:work/canvas-performance-0.5
