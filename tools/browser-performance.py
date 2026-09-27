@@ -12,6 +12,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(args=['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
     errors = []
     observations = []
+    failures = []
     def start():
         context = browser.new_context(viewport={'width': 1440, 'height': 1000})
         page = context.new_page()
@@ -64,10 +65,16 @@ with sync_playwright() as p:
         page.keyboard.press('Tab')
         editing()
         attr('data-table-cell-column', 2)
-        # Double tap the third cell after cancelling its native input overlay.
+        # Native input attachment and XAML layout complete on separate frame turns.
+        # Wait for the visibly arranged cell before using its browser coordinates.
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        capture_state('table-cell-before-pointer')
         rect = page.evaluate("() => {const r=document.activeElement.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};}")
         page.keyboard.press('Escape')
-        page.mouse.dblclick(rect['x'], rect['y'])
+        page.wait_for_function("() => document.activeElement?.tagName !== 'TEXTAREA'")
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        observations.append({'view': 'table-pointer-target', **rect})
+        page.mouse.dblclick(rect['x'], rect['y'], delay=80)
         editing()
         attr('data-table-cell-column', 2)
         page.keyboard.press('Escape')
@@ -88,6 +95,8 @@ with sync_playwright() as p:
         attr('data-primary-height', fitted)
         capture_state('table-canvas-autofit')
         print('PASS: on-slide cell input, Tab navigation, pointer double-tap, undo/redo and content-driven row sizing.', flush=True)
+    except Exception as error:
+        failures.append('Canvas table editing: ' + str(error))
     finally:
         capture_state('canvas-final')
         context.close()
@@ -138,8 +147,12 @@ with sync_playwright() as p:
         attr('data-slide-count', 1000)
         print('PASS: 1,000-slide filmstrip/sorter navigation, bounded tile realization, resize, deletion and undo.', flush=True)
         assert not errors, errors
+    except Exception as error:
+        failures.append('Large-deck navigation: ' + str(error))
     finally:
         capture_state('performance-final')
-        (out / 'browser-performance.json').write_text(json.dumps({'note': 'Synthetic browser sample and input/model latency, not physical-GPU FPS.', 'observations': observations, 'errors': errors}, indent=2))
+        (out / 'browser-performance.json').write_text(json.dumps({'note': 'Synthetic browser sample and input/model latency, not physical-GPU FPS.', 'observations': observations, 'errors': errors, 'failures': failures}, indent=2))
         context.close()
         browser.close()
+
+    assert not failures and not errors, {'failures': failures, 'pageErrors': errors}
