@@ -22,7 +22,7 @@ public sealed class MainPage : Page
             UpdateDiagnostics();
             _editor.Viewport.Focus(FocusState.Programmatic);
 #if __WASM__
-            global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("document.addEventListener('keydown',e=>{if(e.key==='F5'||(e.ctrlKey&&['s','o','m'].includes(e.key.toLowerCase())))e.preventDefault();});requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.setAttribute('data-presentationspace','ready')));");
+            global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("document.addEventListener('keydown',e=>{if(e.key==='F5'||(e.ctrlKey&&['s','o','m','b','i','u'].includes(e.key.toLowerCase())))e.preventDefault();});requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.setAttribute('data-presentationspace','ready')));");
 #endif
         };
     }
@@ -31,7 +31,9 @@ public sealed class MainPage : Page
 #if __WASM__
         var session = _editor.Session;
         string title = Uri.EscapeDataString(session.Document.Title + " — PresentationSpace");
-        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.title=decodeURIComponent('{title}');document.documentElement.setAttribute('data-slide-count','{session.Document.Slides.Length}');document.documentElement.setAttribute('data-slide-index','{session.SlideIndex}');document.documentElement.setAttribute('data-shape-count','{session.CurrentSlide.Shapes.Length}');document.documentElement.setAttribute('data-selection-count','{session.Selection.Count}');document.documentElement.setAttribute('data-presenting','{(_editor.IsPresenting ? "true" : "false")}');");
+        string layout = Uri.EscapeDataString(session.CurrentSlide.LayoutName ?? "");
+        // Read-only diagnostics: tests still invoke real keyboard/pointer input; no document mutation bridge.
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.title=decodeURIComponent('{title}');document.documentElement.setAttribute('data-slide-count','{session.Document.Slides.Length}');document.documentElement.setAttribute('data-slide-index','{session.SlideIndex}');document.documentElement.setAttribute('data-shape-count','{session.CurrentSlide.Shapes.Length}');document.documentElement.setAttribute('data-selection-count','{session.Selection.Count}');document.documentElement.setAttribute('data-presenting','{(_editor.IsPresenting ? "true" : "false")}');document.documentElement.setAttribute('data-active-layout',decodeURIComponent('{layout}'));document.documentElement.setAttribute('data-text-length','{session.CurrentSlide.Shapes.Sum(shape => shape.Text.Length)}');document.documentElement.setAttribute('data-primary-text-length','{session.PrimaryShape?.Text.Length ?? 0}');document.documentElement.setAttribute('data-primary-range-count','{session.PrimaryShape?.TextRanges.Length ?? 0}');");
 #endif
     }
 }
