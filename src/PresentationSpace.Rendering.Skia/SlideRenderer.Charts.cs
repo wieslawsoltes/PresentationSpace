@@ -13,6 +13,7 @@ public sealed partial class SlideRenderer
     {
         ChartModel.Validate(chart);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
+        int saveCount = canvas.SaveCount;
         canvas.Save();
         try
         {
@@ -40,7 +41,7 @@ public sealed partial class SlideRenderer
                     canvas.DrawRect(x, row + 5, 9, 9, paint);
                     Text(circular ? chart.Categories[i] : chart.Series[i].Name, new(x + 12, row, 138, 19), ParagraphAlignment.Left, size: 11);
                 }
-                if (legendCount > shown) Text($"+{legendCount - shown} more categories", new(12, y + legendRows * 19, 616, 18), size: 10);
+                if (legendCount > shown) Text($"+{legendCount - shown} more {(circular ? "categories" : "series")}", new(12, y + legendRows * 19, 616, 18), size: 10);
             }
 
             void DrawCircular()
@@ -55,7 +56,17 @@ public sealed partial class SlideRenderer
                     double value = values[i] ?? 0; if (value <= 0) continue;
                     float sweep = (float)(value / total * 360);
                     using var wedge = new SKPath();
-                    if (chart.Kind == ChartKind.Pie)
+                    if (sweep >= 359.999f)
+                    {
+                        wedge.AddOval(circle);
+                        if (chart.Kind == ChartKind.Doughnut)
+                        {
+                            float inner = radius * chart.HoleSize / 100;
+                            wedge.FillType = SKPathFillType.EvenOdd;
+                            wedge.AddOval(new(cx - inner, cy - inner, cx + inner, cy + inner));
+                        }
+                    }
+                    else if (chart.Kind == ChartKind.Pie)
                     { wedge.MoveTo(cx, cy); wedge.ArcTo(circle, start, sweep, false); wedge.Close(); }
                     else
                     {
@@ -84,22 +95,15 @@ public sealed partial class SlideRenderer
                 var intervals = ChartModel.Intervals(chart);
                 double low = Math.Min(0, intervals.IsEmpty ? 0 : intervals.Min(v => Math.Min(v.Start, v.End)));
                 double high = Math.Max(0, intervals.IsEmpty ? 1 : intervals.Max(v => Math.Max(v.Start, v.End)));
-                double span = high - low;
-                if (span <= 0) { low = 0; high = 1; span = 1; }
-                double step = Math.Pow(10, Math.Floor(Math.Log10(span / 4)));
-                double normalized = span / (4 * step);
-                step *= normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-                low = Math.Floor(low / step) * step; high = Math.Ceiling(high / step) * step;
-                if (chart.Grouping == ChartGrouping.PercentStacked) { low = 0; high = 1; step = .25; }
-                span = high - low;
+                var axis = ChartAxisScale.Create(low, high, chart.Grouping == ChartGrouping.PercentStacked);
                 bool horizontal = chart.Kind == ChartKind.Bar;
-                float Position(double value) => horizontal ? area.X + (float)((value - low) / span) * area.Width : area.Bottom - (float)((value - low) / span) * area.Height;
+                float FractionPosition(double fraction) => horizontal ? area.X + (float)fraction * area.Width : area.Bottom - (float)fraction * area.Height;
+                float Position(double value) => FractionPosition(axis.Fraction(value));
                 using var grid = new SKPaint { Color = Color("#DEE3EB"), StrokeWidth = 1, IsAntialias = true };
-                for (int tick = 0; tick <= 12; tick++)
+                foreach (var tick in axis.Ticks())
                 {
-                    double value = low + tick * step; if (value > high + step * .01) break;
-                    float position = Position(value);
-                    string label = chart.Grouping == ChartGrouping.PercentStacked ? value.ToString("0%", CultureInfo.InvariantCulture) : ChartNumber(value);
+                    float position = FractionPosition(tick.Fraction);
+                    string label = chart.Grouping == ChartGrouping.PercentStacked ? tick.Value.ToString("0%", CultureInfo.InvariantCulture) : ChartNumber(tick.Value);
                     if (horizontal) { canvas.DrawLine(position, area.Y, position, area.Bottom, grid); Text(label, new(position - 28, area.Bottom + 3, 56, 22), size: 10); }
                     else { canvas.DrawLine(area.X, position, area.Right, position, grid); Text(label, new(0, position - 11, area.X - 6, 22), ParagraphAlignment.Right, size: 10); }
                 }
@@ -140,7 +144,7 @@ public sealed partial class SlideRenderer
                                 paint.Color = Color(chart.Series[series].Color); canvas.DrawPath(path, paint);
                             }
                             else canvas.DrawPath(path, line);
-                            if (count <= 100) foreach (var point in segment) { paint.Color = line.Color; canvas.DrawCircle(point, 3, paint); }
+                            if (chart.Kind == ChartKind.Line && count <= 100) foreach (var point in segment) { paint.Color = line.Color; canvas.DrawCircle(point, 3, paint); }
                             segment.Clear();
                         }
                         for (int i = 0; i < count; i++)
@@ -167,7 +171,7 @@ public sealed partial class SlideRenderer
                 }
             }
         }
-        finally { canvas.Restore(); }
+        finally { canvas.RestoreToCount(saveCount); }
     }
 
     private static string ChartNumber(double value) => value.ToString(Math.Abs(value) is >= 1e7 or > 0 and < .001 ? "0.##E+0" : "0.###", CultureInfo.InvariantCulture);

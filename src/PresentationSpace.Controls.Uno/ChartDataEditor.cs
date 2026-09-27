@@ -19,6 +19,7 @@ public sealed class ChartDataEditor : UserControl
     private readonly TextBox _title = new() { Header = "Chart title", MaxLength = 32767 };
     private readonly CheckBox _legend = new() { Content = "Show legend" }, _values = new() { Content = "Show data labels" };
     private readonly TextBox _data = new() { Header = "Data · Ctrl+Enter to apply", AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, MinHeight = 150, MaxHeight = 260, MaxLength = ChartTabularData.MaxCharacters, FontSize = 12 };
+    private readonly Slider _hole = new() { Header = "Doughnut hole (%)", Minimum = 10, Maximum = 90, StepFrequency = 1 };
     private readonly ComboBox _series = new() { Header = "Series color", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap, Foreground = OfficePalette.Brush("B42318"), FontSize = 11, Visibility = Visibility.Collapsed };
     private ChartSpec _value = new() { Categories = ["Category 1"], Series = [new() { Values = [0] }] };
@@ -30,8 +31,8 @@ public sealed class ChartDataEditor : UserControl
     {
         var body = new StackPanel { Spacing = 9 };
         body.Children.Add(_kind); body.Children.Add(_grouping); body.Children.Add(_title);
-        body.Children.Add(_legend); body.Children.Add(_values); body.Children.Add(_blanks);
-        body.Children.Add(new TextBlock { Text = "Paste tab-separated cells: category labels in the first column, series names in the first row. Blank numbers remain missing. Quotes preserve tabs and line breaks inside labels.", TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = OfficePalette.Muted });
+        body.Children.Add(_legend); body.Children.Add(_values); body.Children.Add(_blanks); body.Children.Add(_hole);
+        body.Children.Add(new TextBlock { Text = "Paste tab-separated cells: category labels in the first column, series names in the first row. Blank numbers remain missing. Quotes preserve tabs and line breaks inside labels. Apply commits the title, hole size and data; closing the pane discards unapplied changes.", TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = OfficePalette.Muted });
         body.Children.Add(_data); body.Children.Add(_error);
         var apply = new Button { Content = "Apply chart data", HorizontalAlignment = HorizontalAlignment.Stretch };
         AutomationProperties.SetName(apply, "Apply chart data"); apply.Click += (_, _) => Update(c => c); body.Children.Add(apply);
@@ -66,6 +67,7 @@ public sealed class ChartDataEditor : UserControl
             int selected = _series.SelectedIndex;
             _kind.SelectedItem = _value.Kind.ToString(); _grouping.SelectedIndex = (int)_value.Grouping;
             _grouping.IsEnabled = _value.Kind is ChartKind.Column or ChartKind.Bar;
+            _hole.Value = _value.HoleSize; _hole.Visibility = _value.Kind == ChartKind.Doughnut ? Visibility.Visible : Visibility.Collapsed;
             _blanks.SelectedItem = _value.Blanks.ToString(); _legend.IsChecked = _value.ShowLegend; _values.IsChecked = _value.ShowValues;
             _series.ItemsSource = _value.Series.Select(s => s.Name).ToArray(); _series.SelectedIndex = Math.Clamp(selected, 0, _value.Series.Length - 1);
         }
@@ -76,7 +78,7 @@ public sealed class ChartDataEditor : UserControl
         if (_loading) return;
         try
         {
-            var next = change(ChartTabularData.Parse(_data.Text, _value) with { Title = _title.Text }); ChartModel.Validate(next);
+            var next = change(ChartTabularData.Parse(_data.Text, _value) with { Title = _title.Text, HoleSize = (int)Math.Round(_hole.Value) }); ChartModel.Validate(next);
             _value = next; Synchronize(); _data.Text = ChartTabularData.Format(next); _error.Visibility = Visibility.Collapsed;
             ValueChanged?.Invoke(this, next);
         }
