@@ -2,6 +2,7 @@
 import json
 import os
 import time
+import traceback
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -19,6 +20,9 @@ with sync_playwright() as p:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready'", timeout=120000)
+        page.bring_to_front()
+        page.wait_for_function("document.hasFocus() && document.documentElement.getAttribute('data-focus-id') === 'slide-canvas:SlideViewport'", timeout=20000)
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
         return context, page
     def attr(name, value):
         page.wait_for_function('(a) => document.documentElement.getAttribute(a[0]) === a[1]', arg=[name, str(value)], timeout=20000)
@@ -32,7 +36,10 @@ with sync_playwright() as p:
         page.keyboard.press('Enter')
         attr('data-command-version', before + 1)
     def editing():
-        page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'TEXTAREA'", timeout=20000)
+        condition = "() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'TEXTAREA' && document.documentElement.getAttribute('data-focus-id') === 'canvas-table-cell-editor:TextBox'"
+        page.wait_for_function(condition, timeout=20000)
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        page.wait_for_function(condition, timeout=20000)
     def capture_state(name):
         page.screenshot(path=str(out / (name + '.png')), full_page=True)
         (out / (name + '.json')).write_text(json.dumps(page.evaluate("() => ({attributes:Object.fromEntries([...document.documentElement.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])), input:{id:document.activeElement?.id,tag:document.activeElement?.tagName,value:document.activeElement?.value}})"), indent=2))
@@ -96,7 +103,7 @@ with sync_playwright() as p:
         capture_state('table-canvas-autofit')
         print('PASS: on-slide cell input, Tab navigation, pointer double-tap, undo/redo and content-driven row sizing.', flush=True)
     except Exception as error:
-        failures.append('Canvas table editing: ' + str(error))
+        failures.append('Canvas table editing: ' + traceback.format_exc())
     finally:
         capture_state('canvas-final')
         context.close()
@@ -148,7 +155,7 @@ with sync_playwright() as p:
         print('PASS: 1,000-slide filmstrip/sorter navigation, bounded tile realization, resize, deletion and undo.', flush=True)
         assert not errors, errors
     except Exception as error:
-        failures.append('Large-deck navigation: ' + str(error))
+        failures.append('Large-deck navigation: ' + traceback.format_exc())
     finally:
         capture_state('performance-final')
         (out / 'browser-performance.json').write_text(json.dumps({'note': 'Synthetic browser sample and input/model latency, not physical-GPU FPS.', 'observations': observations, 'errors': errors, 'failures': failures}, indent=2))

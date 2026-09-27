@@ -89,14 +89,17 @@ public sealed partial class SlideViewport
         AutomationProperties.SetAutomationId(_cellEditor, "canvas-table-cell-editor");
         Canvas.SetLeft(_cellEditor, _ox + bounds.X * _scale); Canvas.SetTop(_cellEditor, _oy + bounds.Y * _scale);
         _overlay.Children.Add(_cellEditor);
-        _cellEditor.TextChanged += (_, _) => CaptureCellDraft();
-        _cellEditor.SelectionChanged += (_, _) => CaptureCellDraft();
-        _cellEditor.LostFocus += (_, _) => CommitCellText();
-        _cellEditor.KeyDown += (_, e) =>
+        _cellEditor.TextChanged += (sender, _) => { if (ReferenceEquals(sender, _cellEditor)) CaptureCellDraft(); };
+        _cellEditor.SelectionChanged += (sender, _) => { if (ReferenceEquals(sender, _cellEditor)) CaptureCellDraft(); };
+        // Native focus events can arrive after Tab has already created the next editor.
+        // An event from the removed text box must not commit or remove its successor.
+        _cellEditor.LostFocus += (sender, _) => { if (ReferenceEquals(sender, _cellEditor)) CommitCellText(); };
+        _cellEditor.KeyDown += (sender, e) =>
         {
+            if (!ReferenceEquals(sender, _cellEditor)) return;
             if (e.Key == VirtualKey.Escape) { CancelCellText(); Focus(FocusState.Programmatic); e.Handled = true; }
             else if (e.Key == VirtualKey.Enter && Key(VirtualKey.Control)) { CommitCellText(); Focus(FocusState.Programmatic); e.Handled = true; }
-            else if (e.Key == VirtualKey.Tab) { CommitCellText(); MoveTableCell(Key(VirtualKey.Shift) ? -1 : 1); EditTableCell(); e.Handled = true; }
+            else if (e.Key == VirtualKey.Tab) { e.Handled = true; NavigateTableTab(); }
             else if (Key(VirtualKey.Control) && e.Key is VirtualKey.B or VirtualKey.I or VirtualKey.U)
             {
                 CaptureCellDraft(); int start = _cellTextStart, length = _cellTextLength;
@@ -174,11 +177,23 @@ public sealed partial class SlideViewport
         // Handle it before a native text control or focus manager consumes the key.
         if (e.Handled || e.Key != VirtualKey.Tab || Key(VirtualKey.Control) || ActiveTable is null) return;
         e.Handled = true;
+        NavigateTableTab();
+    }
+    private void NavigateTableTab()
+    {
         bool editing = _cellEditor is not null;
         CommitCellText();
         MoveTableCell(Key(VirtualKey.Shift) ? -1 : 1);
-        if (editing) EditTableCell();
-        else Focus(FocusState.Programmatic);
+        var target = _cellSelection;
+        // Do not attach the next native input inside PreviewKeyDown. Uno delivers
+        // CharacterReceived and completes focus traversal after routed key handlers.
+        // Attaching here lets that still-active Tab event detach the new input.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!IsLoaded || ActiveTable is null || !ReferenceEquals(target, _cellSelection) || _cellEditor is not null) return;
+            if (editing) EditTableCell();
+            else Focus(FocusState.Programmatic);
+        });
     }
     private bool HandleTableKey(KeyRoutedEventArgs e)
     {
@@ -189,7 +204,7 @@ public sealed partial class SlideViewport
         {
             case VirtualKey.Escape: _cellSelection = null; Refresh(); InteractionChanged?.Invoke(this, EventArgs.Empty); break;
             case VirtualKey.F2: case VirtualKey.Enter: EditTableCell(); break;
-            case VirtualKey.Tab: MoveTableCell(Key(VirtualKey.Shift) ? -1 : 1); break;
+            case VirtualKey.Tab: NavigateTableTab(); break;
             case VirtualKey.Right: SelectTableCell(cell.Row, Math.Min(table.ColumnCount - 1, cell.Column + cell.ColumnSpan), Key(VirtualKey.Shift)); break;
             case VirtualKey.Left: SelectTableCell(cell.Row, Math.Max(0, cell.Column - 1), Key(VirtualKey.Shift)); break;
             case VirtualKey.Up: SelectTableCell(Math.Max(0, cell.Row - 1), cell.Column, Key(VirtualKey.Shift)); break;
