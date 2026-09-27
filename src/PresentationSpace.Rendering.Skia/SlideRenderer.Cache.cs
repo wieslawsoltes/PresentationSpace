@@ -56,7 +56,16 @@ public sealed partial class SlideRenderer
     {
         // Images are already cheap cached-image draws; do not pin decoded images in retained pictures.
         if (!EnablePictureCache || MaximumCachedPictures <= 0 || PictureCacheBudget <= 0 || shape.Kind == ShapeKind.Image)
-        { DrawShape(canvas, document, shape); return; }
+        {
+            canvas.Save();
+            try
+            {
+                canvas.Translate(shape.Bounds.X, shape.Bounds.Y);
+                DrawShape(canvas, document, shape with { Bounds = new(0, 0, shape.Bounds.Width, shape.Bounds.Height) });
+            }
+            finally { canvas.Restore(); }
+            return;
+        }
         SKPicture? picture = null;
         if (_pictures.TryGetValue(shape.Id, out var node))
         {
