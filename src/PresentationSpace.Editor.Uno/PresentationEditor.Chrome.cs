@@ -24,7 +24,9 @@ public sealed partial class PresentationEditor
     private T TrackChrome<T>(string name, T element) where T : FrameworkElement
     {
         _chrome[name] = element;
-        AutomationProperties.SetAutomationId(element, name);
+        // Diagnostics names must not replace stable public automation IDs used by hosts.
+        if (string.IsNullOrEmpty(AutomationProperties.GetAutomationId(element)))
+            AutomationProperties.SetAutomationId(element, name);
         return element;
     }
 
@@ -100,8 +102,8 @@ public sealed partial class PresentationEditor
         ViewChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private bool _compactFilmstrip;
-    private void ToggleFilmstrip() { _compactFilmstrip = !_compactFilmstrip; ApplyEditorLayout(); }
+    private bool? _filmstripOverride;
+    private void ToggleFilmstrip() { _filmstripOverride = !(_filmstripOverride ?? ActualWidth >= 640); ApplyEditorLayout(); }
     private void ApplyEditorLayout()
     {
         double width = ActualWidth, height = ActualHeight;
@@ -112,7 +114,7 @@ public sealed partial class PresentationEditor
         Visible(_commentsQuick, width >= 1000); Visible(_shareQuick, width >= 1000); Visible(_moreQuick, width < 1180);
         Visible(_saveState, width >= 840);
         if (_presentQuick is not null) { _presentQuick.Content = width < 720 ? "▷" : "▷  Present"; _presentQuick.Padding = new(width < 720 ? 7 : 11, 4, width < 720 ? 7 : 11, 4); }
-        bool film = width >= 640 || _compactFilmstrip;
+        bool film = _filmstripOverride ?? width >= 640;
         _filmColumn.Width = new GridLength(!film ? 0 : width < 820 ? 140 : Math.Clamp(_filmColumn.Width.Value, 180, 360));
         Visible(_filmstrip, film); Visible(_leftSplitter, film);
         _workspace.ColumnDefinitions[1].Width = new GridLength(film ? 5 : 0);
@@ -121,7 +123,7 @@ public sealed partial class PresentationEditor
         _workspace.ColumnDefinitions[3].Width = new GridLength(docked ? 5 : 0);
         Visible(_rightSplitter, docked); Visible(_format, _inspectorOpen);
         Grid.SetColumn(_format, docked ? 4 : 2); Grid.SetColumnSpan(_format, docked ? 1 : 3);
-        _format.Width = docked ? double.NaN : Math.Min(320, Math.Max(240, width - (film ? _filmColumn.Width.Value + 5 : 0) - 8));
+        _format.Width = docked ? double.NaN : Math.Min(320, Math.Max(0, width - (film ? _filmColumn.Width.Value + 5 : 0) - 8));
         _format.HorizontalAlignment = docked ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
         _notesRow.Height = new GridLength(_notesVisible && height >= 520 ? 86 : 0);
         Visible(_notes, _notesVisible && height >= 520);

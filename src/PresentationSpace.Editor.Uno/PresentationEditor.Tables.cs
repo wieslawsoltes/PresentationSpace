@@ -10,19 +10,11 @@ public sealed partial class PresentationEditor
     {
         _commands.Add(("Edit table cell on slide", () => { HideInspector(); DispatcherQueue.TryEnqueue(Viewport.EditTableCell); }));
         _commands.Add(("Auto-fit table rows", () => { Viewport.AutoFitTableRows(); Viewport.Focus(FocusState.Programmatic); }));
-        void Add(string title, Action<TableDataEditor> execute, bool focusText = false) => _commands.Add((title, () =>
+        void Add(string title, Action<TableDataEditor> execute, bool focusText = false) => _commands.Add((title, () => DesignTable(table =>
         {
-            if (Session.PrimaryShape is not { Kind: ShapeKind.Table } || Session.Selection.Count != 1) { Notice("Select one table first."); return; }
-            // Keep the current editor and its range when invoking a table command from command search.
-            if (_format.TableEditor is null) ShowInspector(InspectorMode.Format);
-            else { _inspectorOpen = true; ApplyEditorLayout(); }
-            if (_format.TableEditor is { } table)
-            {
-                execute(table);
-                if (focusText) DispatcherQueue.TryEnqueue(table.FocusText);
-                else Viewport.Focus(FocusState.Programmatic);
-            }
-        }));
+            execute(table);
+            if (focusText) DispatcherQueue.TryEnqueue(table.FocusText);
+        }, focusText)));
         Add("Edit table data", _ => { }, true);
         Add("Table select row", t => t.SelectRow());
         Add("Table select column", t => t.SelectColumn());

@@ -12,6 +12,7 @@ public sealed class RibbonScroller : UserControl
     private readonly Button _previous, _next;
     private readonly FrameworkElement _items;
     private bool _queued;
+    public event EventHandler? ViewChanged;
     public double Offset => _scroll.HorizontalOffset;
     public bool HasOverflow => _previous.Visibility == Visibility.Visible;
     public RibbonScroller(FrameworkElement items, string name)
@@ -51,6 +52,7 @@ public sealed class RibbonScroller : UserControl
             _previous.Visibility = _next.Visibility = overflow ? Visibility.Visible : Visibility.Collapsed;
             _previous.IsEnabled = _scroll.HorizontalOffset > 1;
             _next.IsEnabled = _scroll.HorizontalOffset < _scroll.ScrollableWidth - 1;
+            ViewChanged?.Invoke(this, EventArgs.Empty);
         })) _queued = false;
     }
     public void Reveal(FrameworkElement element)

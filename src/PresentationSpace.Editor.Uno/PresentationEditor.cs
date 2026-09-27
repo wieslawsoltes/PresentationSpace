@@ -44,6 +44,7 @@ public sealed partial class PresentationEditor : UserControl
         Viewport.Session=Session;_filmstrip.Session=Session;_format.Session=Session;_notes.Session=Session;_sorter.Session=Session;_status.Session=Session;
         _root.Background=OfficePalette.Brush("F5F5F5");_root.RowDefinitions.Add(new(){Height=new GridLength(44)});_root.RowDefinitions.Add(new(){Height=GridLength.Auto});_root.RowDefinitions.Add(new(){Height=GridLength.Auto});_root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});_root.RowDefinitions.Add(new(){Height=new GridLength(32)});
         _root.Children.Add(BuildTitleBar());Grid.SetRow(Ribbon,1);_root.Children.Add(Ribbon);Grid.SetRow(_notice,2);_root.Children.Add(_notice);Grid.SetRow(_workspace,3);_root.Children.Add(_workspace);Grid.SetRow(_status,4);_root.Children.Add(_status);BuildWorkspace();BuildRibbon();BuildCommands();
+        Ribbon.ViewChanged+=(_,_)=>ViewChanged?.Invoke(this,EventArgs.Empty);
         TrackChrome("ribbon",Ribbon);TrackChrome("status-bar",_status);TrackChrome("workspace",_workspace);TrackChrome("format-pane",_format);TrackChrome("slide-viewport",Viewport);
         Grid.SetRowSpan(_player,5);_root.Children.Add(_player);Content=_root;
         _filmstrip.SlideInvoked+=(_,_)=>{ShowNormal();Viewport.Focus(FocusState.Programmatic);};_format.CloseRequested+=(_,_)=>HideInspector();_sorter.SlideInvoked+=(_,_)=>ShowNormal();
@@ -71,7 +72,7 @@ public sealed partial class PresentationEditor : UserControl
         if(!e.IsPreview&&!ReferenceEquals(_observed,Session.Document)){_observed=Session.Document;if(_autoSave&&Storage is not null){_recoveryTimer.Stop();_recoveryTimer.Start();_status.Message="Saving local recovery…";}}
         _status.SetZoom(Viewport.Zoom);
     }
-    public void ShowInspector(InspectorMode mode){Viewport.CommitText();_inspectorOpen=true;_format.Mode=mode;ApplyEditorLayout();_format.Rebuild();}
+    public void ShowInspector(InspectorMode mode){Viewport.CommitText();_inspectorOpen=true;_format.Mode=mode;ApplyEditorLayout();}
     public void HideInspector(){_inspectorOpen=false;ApplyEditorLayout();}
     public void ToggleNotes(){_notes.Commit();_notesVisible=!_notesVisible;ApplyEditorLayout();}
     public void ShowNormal(){Viewport.Visibility=Visibility.Visible;_sorter.Visibility=Visibility.Collapsed;Viewport.Focus(FocusState.Programmatic);ViewChanged?.Invoke(this,EventArgs.Empty);}

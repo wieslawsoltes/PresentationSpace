@@ -81,3 +81,11 @@ Browser diagnostics expose counts/state for tests, not document mutation APIs. B
 `PresentationCanvas` uses Uno Graphics2DSK `SKCanvasElement` rather than a raster-backed XAML canvas. Shape pictures and static scenes are retained with explicit budgets and content keys; image assets stay in their own cache. `VirtualSlideView` shares a renderer among recycled filmstrip/sorter tiles. `VirtualSlideLayout` is UI-independent and reusable. See [Performance](performance.md) for cache semantics and reproducible measurement.
 
 Direct table-cell input uses the shared `TableLayout` and inverse rotation hit testing. Drafts commit through `EditorSession`, refusing stale table replacements. Row auto-fit uses the renderer's shared wrapped rich-text line measurement and returns a new immutable table plus total height.
+
+## Responsive chrome and indexed tables (0.6)
+
+`CompactToggleSwitch` and `RibbonScroller` are public controls in Ribbon.Uno. The toggle uses ToggleButton state/automation and an explicitly sized visual rather than scaling or cropping a platform ToggleSwitch template. The scroller compares content width against the entire host before showing arrows, avoiding a visibility oscillation caused by the arrows themselves. Document editing remains in the shared session; the compact search is another view of the same command list.
+
+`TableGridIndex.For(table)` validates an immutable snapshot once and shares its ownership map and sorted merge-origin reading order using a `ConditionalWeakTable`. Equal-but-distinct snapshots deliberately receive distinct indexes. No global strong-reference list keeps old undo documents alive. `TableLayout` owns independent coordinate arrays, so callers cannot corrupt another layout by modifying its public X/Y arrays. Layout creation still has a first-use validation/index cost.
+
+Table border authoring expands ranges to merged owners, maps the requested sides, updates matching neighboring sides, and constructs a new immutable table. The model stores one border per cell side; partial modifications along a neighbor's merged side therefore fail atomically. Direct fills/text styles override palette and emphasis defaults. Native schema 4 announces the additive column-style flags to prevent older readers silently ignoring them.

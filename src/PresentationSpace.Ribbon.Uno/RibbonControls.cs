@@ -26,7 +26,7 @@ public sealed class RibbonCommandButton : Button
         var content=new StackPanel{Orientation=large?Orientation.Vertical:Orientation.Horizontal,Spacing=large?5:7,HorizontalAlignment=HorizontalAlignment.Center};
         content.Children.Add(new FontIcon{Glyph=glyph,FontSize=large?25:15,Foreground=OfficePalette.Accent});
         if(!string.IsNullOrEmpty(label))content.Children.Add(new TextBlock{Text=label,FontSize=11,TextAlignment=TextAlignment.Center,Foreground=OfficePalette.Ink,TextWrapping=TextWrapping.Wrap,MaxWidth=large?82:145,VerticalAlignment=VerticalAlignment.Center});
-        Content=content;AutomationProperties.SetName(this,label.Replace('\n',' '));AutomationProperties.SetAutomationId(this,id);ToolTipService.SetToolTip(this,label.Replace('\n',' ')+(shortcut is null?"":" ("+shortcut+")"));Click+=(_,_)=>action();
+        Content=content;AutomationProperties.SetName(this,string.IsNullOrWhiteSpace(label)?id:label.Replace('\n',' '));AutomationProperties.SetAutomationId(this,id);ToolTipService.SetToolTip(this,label.Replace('\n',' ')+(shortcut is null?"":" ("+shortcut+")"));Click+=(_,_)=>action();
     }
 }
 
@@ -54,6 +54,7 @@ public sealed class RibbonControl : UserControl
     private readonly List<Button> _buttons=[];
     public string SelectedTab{get;private set;}="";
     public event EventHandler<string>? TabChanged;
+    public event EventHandler? ViewChanged;
     public bool IsCollapsed{get;private set;}
     private readonly RibbonScroller _groupScroll, _tabsScroll;
     public bool GroupsOverflow => _groupScroll.HasOverflow;
@@ -65,6 +66,8 @@ public sealed class RibbonControl : UserControl
         _tabsScroll=new RibbonScroller(_tabs,"ribbon tabs");root.Children.Add(_tabsScroll);
         _groupScroll=new RibbonScroller(_groups,"ribbon commands");Grid.SetRow(_groupScroll,1);root.Children.Add(_groupScroll);
         Content=new Border{Child=root,BorderBrush=OfficePalette.Line,BorderThickness=new(0,0,0,1)};
+        _tabsScroll.ViewChanged+=(_,_)=>ViewChanged?.Invoke(this,EventArgs.Empty);
+        _groupScroll.ViewChanged+=(_,_)=>ViewChanged?.Invoke(this,EventArgs.Empty);
     }
     public void SetTabs(IEnumerable<RibbonTab> tabs)
     {

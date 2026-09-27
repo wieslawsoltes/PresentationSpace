@@ -14,17 +14,17 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.5 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.6 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
 
-## What is new in 0.5
+## What is new in 0.6
 
-**Accelerated composition and bounded slide views.** The viewport, previews and player now draw with Uno `SKCanvasElement`, preserving the compositor's transform and clip instead of copying a separate `SKXamlCanvas` raster surface. Filmstrip and sorter recycle visible tiles plus a small overscan/reuse pool instead of constructing a control for every slide.
+**Aligned, responsive editor chrome.** A reusable compact AutoSave toggle centers its complete pill and thumb inside a keyboard-operable hit target. Ribbon buttons and font controls use explicit compact minimum sizes rather than clipping larger theme templates. The title and document name share constrained columns; quick actions adapt to the available width. Hidden command search stays available through **Alt+Q** and the **More presentation actions** menu. Ribbon tabs and commands expose scroll arrows only when they overflow.
 
-**Retained drawing and incremental edits.** Local-coordinate Skia pictures reuse unchanged text/table/chart drawing across movement and rotation. A retained scene handles repeated static drawing; bounded caches invalidate on content, size, font-provider or scene changes. One-slide edits no longer reconcile the entire deck, and repeated selection/style lookup avoids unnecessary scans. See [Performance](docs/performance.md) for the benchmark method, cache budgets and measurement boundaries.
+**Table Design.** Four palette presets, first/last-column emphasis, column banding and ten border scopes are available in the new ribbon tab, the table inspector and command search. Border operations update both sides of shared edges and retain untouched text, styles, geometry and merges. Unsupported partial changes along a neighboring merged-cell edge are rejected as one transaction. Column flags are written as native DrawingML attributes; native documents with those flags use schema 4, while earlier schemas remain readable.
 
-**Direct table-cell editing and row auto-fit.** Double-click a table cell on the slide, or use **Edit table cell on slide** in command search. Arrow keys navigate cells, Shift extends a range, Enter/F2 opens text input, and Tab commits then moves to the next cell. Ctrl+Enter commits; Escape cancels the current input draft. Character-range formatting and undo/redo preserve unaffected styles. **Auto-fit table rows** measures the shared text layout and fits rows, including merged spans, as one undoable edit. Typing still uses a plain native TextBox overlay, not fully styled WYSIWYG input or complete Office typography.
+**Indexed table editing and layout.** An immutable, weak-keyed `TableGridIndex` shares validated ownership and reading order across table layouts and cell navigation. Warm lookup is constant-time and layouts rebuild only their coordinate edges, not the table's ownership map. Diagnostics coalesce UI updates and reuse table statistics until the table changes. See [Performance](docs/performance.md) for measured workloads and the cost of first use.
 
-Use **Open large-deck sample** to load a reproducible 1,000-slide workspace, **Focus slide thumbnails** / **Focus slide sorter** for keyboard navigation, and **Rendering statistics** for draw callback and cache counters. The sample asks before discarding unsaved work. CPU callback timing is not GPU duration or FPS. The earlier rich-text, layouts, native chart/workbook and merged-table features remain available.
+Earlier direct Skia composition, retained drawing, virtualized slide views, rich text, native chart/workbook and merged-table features remain available. Use **Open large-deck sample** for a 1,000-slide workspace and **Rendering statistics** for draw/cache counters. These counters are not GPU duration or FPS.
 
 ## The workspace
 
@@ -41,7 +41,7 @@ The custom Uno workspace combines a compact title bar, quick-access commands, ta
 | Workflow | Transactional undo/redo, internal clipboard, command search, local comments, notes, find/replace and device-local recovery |
 | Files | Native `.pspace`, documented PPTX subset, slide PNG and vector PDF export |
 
-The ribbon includes Home, Insert, Draw, Design, Transitions, Animations, Slide Show, Review, View, Shape Format and Help, plus the File workspace. Commands use the shared document session. Unsupported cloud features are not simulated.
+The ribbon includes Home, Insert, Draw, Design, Transitions, Animations, Slide Show, Review, View, Shape Format, Table Design and Help, plus the File workspace. Commands use the shared document session. Unsupported cloud features are not simulated.
 
 ## Start developing
 
@@ -85,7 +85,7 @@ Serve the distribution over HTTP(S) at the configured base path. `file://` loadi
 | `PresentationSpace.Core` | Immutable documents, rich-text operations, layouts, tables, chart data/axes, geometry, commands, selection and undo | No UI framework |
 | `PresentationSpace.Formats` | Bounded PPTX ZIP/XML, native chart/table parts and embedded chart workbooks | Core |
 | `PresentationSpace.Rendering.Skia` | Slides, merged/styled tables, six chart types, mixed text, images, thumbnails, selection, PNG/PDF | Core + SkiaSharp |
-| `PresentationSpace.Ribbon.Uno` | Ribbon tabs, groups, buttons and Office-style palette | Uno |
+| `PresentationSpace.Ribbon.Uno` | Ribbon tabs, overflow scrolling, groups, buttons, compact toggle and Office-style palette | Uno |
 | `PresentationSpace.Controls.Uno` | Viewport, filmstrip, sorter, inspector, table/chart data editors, notes, splitters, status and slide show | Uno + renderer |
 | `PresentationSpace.Editor.Uno` | Embeddable complete editor and injectable storage contract | Reusable libraries above |
 
@@ -205,7 +205,7 @@ Browser/OS interception can vary; ribbon alternatives are available. Search incl
 The normal workflows are deliberately limited to three responsibilities:
 
 - **Build and test:** Linux, Windows and macOS matrix; headless editing/geometry/rendering tests, native serialization, PPTX round trips, independent Open XML validation of presentations and chart workbooks, desktop compilation, and same-runner CPU/raster baseline comparisons.
-- **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping table editing/merge/track workflows, direct on-slide cell input, row auto-fit and bounded 1,000-slide navigation, screenshots, six-library packaging and Pages deployment.
+- **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping table editing/merge/track workflows, direct on-slide cell input, row auto-fit, bounded 1,000-slide navigation and responsive title-bar/table-design regressions, screenshots, six-library packaging and Pages deployment.
 - **Release:** tag-triggered tests, self-contained desktop distributions, browser output, NuGet artifacts and a GitHub Release. Tagged release execution and signing are separate from ordinary build checks.
 
 Read each run's results rather than treating configured coverage as completed qualification. Tests establish behavior for their covered cases, not every PowerPoint file, accessibility standard, GPU, browser or production-scale workload.

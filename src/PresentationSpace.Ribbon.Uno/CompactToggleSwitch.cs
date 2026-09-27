@@ -22,9 +22,10 @@ public sealed class CompactToggleSwitch : ToggleButton
         VerticalAlignment = VerticalAlignment.Center;
         BorderThickness = new(0); CornerRadius = new(4);
         Background = OfficePalette.Brush("00FFFFFF");
-        // Keep the hit target transparent when checked: the pill, not the button chrome, carries state.
-        foreach (string key in new[] { "ToggleButtonBackgroundChecked", "ToggleButtonBackgroundCheckedPointerOver", "ToggleButtonBackgroundCheckedPressed", "ToggleButtonBackground", "ToggleButtonBackgroundPointerOver", "ToggleButtonBackgroundPressed" })
-            Resources[key] = OfficePalette.Brush("00FFFFFF");
+        // An explicit compiled template keeps global ToggleButton checked-state brushes
+        // from painting a rectangular background behind the capsule.
+        Template = (ControlTemplate)new CompactControlResources()["CompactToggleTemplate"];
+        UseSystemFocusVisuals = true;
         _thumb = new Border { Width = 14, Height = 14, CornerRadius = new(7), Background = OfficePalette.White,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Margin = new(3, 0, 3, 0) };
         _track = new Border { Width = 40, Height = 20, CornerRadius = new(10), Child = _thumb };

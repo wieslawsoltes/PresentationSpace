@@ -63,6 +63,15 @@ with sync_playwright() as p:
         attr('data-autosave', 'false')
         page.keyboard.press('Space')
         attr('data-autosave', 'true')
+        # Exercise the real rename dialog with a maximum-length title before resizing.
+        click('document-title')
+        page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'INPUT'")
+        page.keyboard.press('Control+a')
+        long_title = ('Quarterly presentation with a deliberately long document title ' * 3)[:120]
+        page.keyboard.type(long_title)
+        page.keyboard.press('Enter')
+        page.wait_for_function('(title) => document.title.startsWith(title)', arg=long_title)
+        settle()
         page.screenshot(path=str(out / 'chrome-desktop.png'))
         for width in [1920, 1440, 1280, 1180, 1100, 1024, 1000, 900, 820, 720, 640, 520, 390, 320]:
             page.set_viewport_size({'width': width, 'height': 844 if width < 640 else 1000})
@@ -74,6 +83,14 @@ with sync_playwright() as p:
                 attr('data-ribbon-tab', 'Insert')
                 command('Show Home ribbon')
                 page.screenshot(path=str(out / f'chrome-{width}.png'))
+        # The compact ribbon is reachable with real pointer input, not only command search.
+        attr('data-ribbon-groups-overflow', 'true')
+        before = float(value('data-ribbon-offset'))
+        ribbon = chrome()['ribbon']
+        page.mouse.click(307, ribbon['y'] + 34 + 45)
+        page.wait_for_function('(before) => Number(document.documentElement.getAttribute("data-ribbon-offset")) > before', arg=before)
+        settle()
+        page.screenshot(path=str(out / 'chrome-ribbon-scrolled.png'))
         # Search must remain usable when the title-bar search is collapsed.
         command('New slide')
         attr('data-slide-count', 5)
@@ -104,6 +121,30 @@ with sync_playwright() as p:
         attr('data-ribbon-tab', 'Table Design')
         page.screenshot(path=str(out / 'table-design-06.png'))
         print('PASS: table palettes, first/last/banded columns, selective borders and undo/redo through real commands.', flush=True)
+        command('Close format pane')
+        page.set_viewport_size({'width': 390, 'height': 500})
+        settle()
+        command('Format shape')
+        pane = chrome()['format-pane']
+        assert pane['visible'] and pane['x'] >= 0 and pane['x'] + pane['width'] <= 390.5, pane
+        page.screenshot(path=str(out / 'chrome-compact-inspector.png'))
+        command('Close format pane')
+        # Fresh high-DPI context also exercises the startup layout at compact, low height.
+        context.close()
+        context = browser.new_context(viewport={'width': 720, 'height': 500}, device_scale_factor=2)
+        page = context.new_page()
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        page.goto(url, wait_until='domcontentloaded', timeout=60000)
+        page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready'", timeout=120000)
+        settle()
+        check_layout(720)
+        click('autosave-switch'); attr('data-autosave', 'false')
+        page.keyboard.press('Space'); attr('data-autosave', 'true')
+        for name in ['workspace', 'status-bar']:
+            rect = chrome()[name]
+            assert rect['y'] + rect['height'] <= 500.5, (name, rect)
+        page.screenshot(path=str(out / 'chrome-hidpi.png'))
+        print('PASS: long titles, pointer ribbon scrolling, compact inspector and 2x-scale low-height startup.', flush=True)
         assert not errors, errors
     finally:
         page.screenshot(path=str(out / 'chrome-final.png'))
