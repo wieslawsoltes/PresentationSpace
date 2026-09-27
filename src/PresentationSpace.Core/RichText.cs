@@ -86,7 +86,7 @@ public static class RichText
         return after with { TextRanges = Compact(ranges, after.TextStyle) };
     }
 
-    private static TextStyle ApplyStyleChanges(TextStyle style, TextStyle old, TextStyle value) => style with
+    internal static TextStyle ApplyStyleChanges(TextStyle style, TextStyle old, TextStyle value) => style with
     {
         FontFamily = old.FontFamily == value.FontFamily ? style.FontFamily : value.FontFamily,
         FontSize = old.FontSize == value.FontSize ? style.FontSize : value.FontSize,
@@ -108,7 +108,7 @@ public static class RichText
         {
             if (!previousSlides.TryGetValue(slide.Id, out var previous) || previous.Shapes == slide.Shapes) return slide;
             var shapes = previous.Shapes.ToDictionary(s => s.Id);
-            return slide with { Shapes = slide.Shapes.Select(shape => shapes.TryGetValue(shape.Id, out var old) ? Reconcile(old, shape) : shape).ToImmutableArray() };
+            return slide with { Shapes = slide.Shapes.Select(shape => shapes.TryGetValue(shape.Id, out var old) ? Reconcile(old, TableModel.Reconcile(old, shape)) : shape).ToImmutableArray() };
         }).ToImmutableArray() };
     }
 }

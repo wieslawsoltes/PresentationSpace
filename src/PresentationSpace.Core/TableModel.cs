@@ -54,7 +54,7 @@ public readonly record struct TableRange(int Row, int Column, int RowCount, int 
     public bool Intersects(TableCell c) => c.Row < Bottom && c.Row + c.RowSpan > Row && c.Column < Right && c.Column + c.ColumnSpan > Column;
 }
 
-public static class TableModel
+public static partial class TableModel
 {
     public const int MaxRows = 100, MaxColumns = 100, MaxCells = 10000, MaxTextLength = 1000000;
     public static TableSpec Create(int rows = 4, int columns = 3)
@@ -244,10 +244,13 @@ public static class TableModel
         if (before.Fill != after.Fill) table = table with { Accent = after.Fill };
         if (before.TextStyle != after.TextStyle)
         {
-            table = table with { TextStyle = after.TextStyle, Cells = table.Cells.Select(c =>
+            // Apply only properties changed on the shape, not its complete fallback style.
+            // Otherwise toggling Bold would overwrite a cell's explicit color and font size.
+            TextStyle Patch(TextStyle value) => RichText.ApplyStyleChanges(value, before.TextStyle, after.TextStyle);
+            table = table with { TextStyle = Patch(table.TextStyle), Cells = table.Cells.Select(c => c with
             {
-                var old = TextShape(table, c); var next = RichText.Reconcile(old, old with { TextStyle = after.TextStyle });
-                return c with { TextStyle = next.TextStyle, TextRanges = next.TextRanges };
+                TextStyle = c.TextStyle is { } style ? Patch(style) : null,
+                TextRanges = c.TextRanges.Select(r => r with { Style = Patch(r.Style) }).ToImmutableArray()
             }).ToImmutableArray() };
         }
         return ReferenceEquals(table, before.Table) ? after : Apply(after, table);

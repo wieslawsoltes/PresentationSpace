@@ -34,7 +34,7 @@ public sealed class FormatPane : SessionControl
         if(_building||_committingTable||Session is not {} s)return;
         if(preview&&_lastSelection==s.PrimaryShape?.Id)return;
         if(_mode==InspectorMode.Format&&ReferenceEquals(_lastShape,s.PrimaryShape)&&_lastSelection==s.PrimaryShape?.Id&&_body.Children.Count>0)return;
-        if(_mode==InspectorMode.Format && _tableEditor is not null && s.PrimaryShape is {Kind:ShapeKind.Table} table && _lastSelection==table.Id)
+        if(_mode==InspectorMode.Format && _tableEditor is not null && s.PrimaryShape is {Kind:ShapeKind.Table} table && _lastSelection==table.Id && _lastShape?.Bounds==table.Bounds && _lastShape.Rotation==table.Rotation && _lastShape.Opacity==table.Opacity && _lastShape.AlternativeText==table.AlternativeText)
         { _lastShape=table; _tableEditor.IsEnabled=!table.Locked; _tableEditor.SetValue(TableModel.Get(table)); return; }
         Rebuild();
     }
@@ -79,12 +79,12 @@ public sealed class FormatPane : SessionControl
                 }
                 else Hint("Select one chart to edit its data and design.");
             }
-            else {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));}
+            else if(shape.Kind!=ShapeKind.Table) {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));}
             Section("Size & position");
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));
             NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,8,16384)}}));
             NumericPair("Rotation",shape.Rotation,v=>s.Apply("Rotation",x=>x with{Rotation=v%360}),"Opacity %",shape.Opacity*100,v=>s.Apply("Opacity",x=>x with{Opacity=Math.Clamp(v/100,0,1)}));
-            Section("Line");Palette(color=>s.Apply("Outline color",x=>x with{Stroke=color}));Number("Line width",shape.StrokeWidth,v=>s.Apply("Outline width",x=>x with{StrokeWidth=Math.Clamp(v,0,100)}));
+            if(shape.Kind!=ShapeKind.Table){Section("Line");Palette(color=>s.Apply("Outline color",x=>x with{Stroke=color}));Number("Line width",shape.StrokeWidth,v=>s.Apply("Outline width",x=>x with{StrokeWidth=Math.Clamp(v,0,100)}));}
             if(shape.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table))
             {
                 Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.LostFocus+=(_,_)=>{if(text.Text!=s.PrimaryShape?.Text)s.Apply("Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);

@@ -24,6 +24,7 @@ public sealed class TableDataEditor : UserControl
     private readonly ComboBox _vertical = new() { Header = "Vertical alignment", ItemsSource = Enum.GetNames<Core.VerticalAlignment>(), HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly ComboBox _dash = new() { Header = "Border style", ItemsSource = Enum.GetNames<TableBorderDash>(), SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly CheckBox _header = new() { Content = "Header row" }, _bands = new() { Content = "Banded rows" }, _total = new() { Content = "Total row" };
+    private readonly TextBox _margin = new() { Header = "All cell margins", Text = "3", FontSize = 12 };
     private TableSpec _value = TableModel.Create();
     private int _row, _column, _pageRow, _pageColumn;
     private TableRange _range = new(0, 0, 1, 1);
@@ -59,6 +60,8 @@ public sealed class TableDataEditor : UserControl
         var font = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         font.Children.Add(Button("Bold", () => FormatText(s => s with { Bold = !TableModel.Style(_value, TableModel.CellAt(_value, _row, _column)).Bold })));
         font.Children.Add(Button("Italic", () => FormatText(s => s with { Italic = !TableModel.Style(_value, TableModel.CellAt(_value, _row, _column)).Italic }))); panel.Children.Add(font);
+        panel.Children.Add(Button("Underline", () => FormatText(s => s with { Underline = !TableModel.Style(_value, TableModel.CellAt(_value, _row, _column)).Underline })));
+        panel.Children.Add(_margin); panel.Children.Add(Button("Apply cell margins", () => Change(t => TableModel.EditCells(t, _range, c => c with { MarginLeft = Number(_margin), MarginRight = Number(_margin), MarginTop = Number(_margin), MarginBottom = Number(_margin) }))));
         panel.Children.Add(_fontSize); panel.Children.Add(Button("Apply font size", () => FormatText(s => s with { FontSize = Number(_fontSize) })));
         panel.Children.Add(_horizontal); panel.Children.Add(_vertical); panel.Children.Add(_borderWidth); panel.Children.Add(_dash);
         panel.Children.Add(new TextBlock { Text = "All selected borders", FontSize = 12 }); var borders = new ColorPalette(); borders.ColorSelected += (_, color) => Change(t => TableModel.EditCells(t, _range, c =>

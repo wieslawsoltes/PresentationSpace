@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 — development preview
+
+### Added
+
+- Immutable merged/styled table partitions, validated track weights and text ranges, merge/split, insert/delete rows and columns, and equal distribution.
+- Session-independent Uno cell navigator with range/track selection, explicit text apply, formatting, margins, borders and table header/banding/total options.
+- Native PPTX rectangular merge origins/continuations, per-cell formatting and row/column proportions, including bounded malformed-input rejection.
+- Native schema 3 for structured tables with backward reading of schemas 1 and 2.
+- Shared Skia table layout, merged-border rendering and standalone `RenderTable` API.
+- Headless structure, text/style, schema, rendering and random-operation regressions, plus production browser cell/merge/track workflows.
+
+### Fixed
+
+- Global Replace all now includes table origins while retaining merges and character styles.
+- Table shape formatting propagates only changed properties instead of overwriting custom cell fonts/colors.
+- Theme accents preserve direct cell fills; shape geometry changes refresh inspector fields.
+- Empty-cell paragraph defaults survive supported PPTX round trips.
+
+### Boundaries
+
+Not full PowerPoint parity. Referenced Office table themes/effects, arbitrary cell subdivision, drawing tables, full border conflict rules and direct slide-cell WYSIWYG editing remain unfinished. Apply cell text drafts before selection changes; unapplied drafts are not recovery state. Master/theme, advanced typography, media/SmartArt, timelines, collaboration and comprehensive accessibility qualification remain separate work.
+
+
 ## 0.3.0 — development preview
 
 ### Added

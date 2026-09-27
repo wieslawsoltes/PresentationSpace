@@ -34,11 +34,21 @@ Viewports apply fit/zoom/pan transforms and inverse-transform pointer input. Res
 
 ## Rendering
 
-`SlideRenderer` handles basic shapes, pictures, text, uniform tables and six categorical chart types. `DrawRichText` wraps styled word segments and uses their font metrics, color, emphasis, underline and paragraph properties. Oversized words are broken at text elements. Rendering does not claim complete complex-script shaping or Office typography equivalence.
+`SlideRenderer` handles basic shapes, pictures, text, merged/styled tables and six categorical chart types. `DrawRichText` wraps styled word segments and uses their font metrics, color, emphasis, underline and paragraph properties. Oversized words are broken at text elements. Rendering does not claim complete complex-script shaping or Office typography equivalence.
 
 Each renderer owns typeface and image caches; the image budget is 64 MB, and images over 16 megapixels are rejected. Native assets and font availability affect platform output. Editing is invalidation-driven. The slide-show timer runs during active basic effects and stops once they finish. Skia chooses its backend; this is not a fully GPU-resident engine or a qualified performance benchmark.
 
 PNG exports use sized raster surfaces. PDF exports use Skia's vector document canvas. Both consume the same slide model and renderer as the editor.
+
+## Table model and authoring
+
+`TableSpec` holds positive row/column weights and a complete, non-overlapping grid partition. `TableCell` records exist only at merge origins; text is never duplicated in hidden covered cells. Validation checks dimensions, coverage, finite sizes/margins/borders, colors, text limits and UTF-16 style ranges. The maximum grid is 100 × 100 and the text limit is one million characters per table.
+
+`TableModel` merges/splits, edits visible text, inserts/deletes tracks and distributes relative weights. Merging concatenates nonempty source text in row-major order with paragraph breaks and explicit styles. Splitting retains the combined text at the top-left origin; it does not reconstruct pre-merge cell contents or arbitrarily subdivide tracks. Insertions expand merges crossing the new track; deletion preserves a surviving merge's text. Native schema 3 carries the authoritative structure, while old cells/columns are compatibility projections.
+
+`TableLayout` computes normalized edges and constant-time grid-to-origin mapping. The renderer caches up to 32 table layouts per renderer using immutable identity and bounds, clips text to each margin inset and draws only origin-cell perimeters. Conflicting shared borders are drawn narrow-to-wide; equal widths use stable cell order. This is deterministic, not a claim of full Office border-conflict precedence. `RenderTable` also draws directly without a document. Caller transforms and save state are restored.
+
+`TableDataEditor` is independent of EditorSession. Its navigator creates at most 8 × 4 visible cell slots plus track headers. Cell text requires explicit Apply/Ctrl+Enter; structure and style commands first incorporate a valid current text draft. Snapshots are emitted as `ValueChanged`, and the host commits one undoable edit. Unapplied drafts are not recovery state. General shape formatting applies only changed properties to cell defaults/ranges; global Replace all visits visible origins; theme accents leave explicit cell fills intact.
 
 ## Chart model and authoring
 
@@ -54,7 +64,7 @@ Formats uses BCL ZIP/XML APIs with bounded input and explicit diagnostics. The p
 
 Text boxes emit `a:r` runs and paragraph properties. Placeholder roles/indexes and five generated layout parts connect to a generated master/theme. Import resolves omitted placeholder geometry through layout and master parts, and has partial style/background fallback; it is not full inherited-artwork/theme reconstruction.
 
-Uniform tables emit actual `a:tbl` graphic frames. Supported charts emit chart parts with relationships, typed category/value caches and embedded XLSX packages. Each workbook uses inline strings for labels and numeric value cells; missing points have no numeric cell, and labels cannot become spreadsheet formulas. Import reads supported cached chart data only, validates counts/indexes before allocating, and diagnoses unsupported chart types. External workbooks are never retrieved.
+Structured tables emit actual `a:tbl` graphic frames, with physical grid cells carrying merge-origin spans and hMerge/vMerge continuation flags. Cell text runs, explicit fills/borders/margins and row/column proportions are retained. Import reconstructs a complete non-overlapping partition and rejects malformed span/count/continuation data before large allocations. Referenced Office table-style effects are not fully resolved. Supported charts emit chart parts with relationships, typed category/value caches and embedded XLSX packages. Each workbook uses inline strings for labels and numeric value cells; missing points have no numeric cell, and labels cannot become spreadsheet formulas. Import reads supported cached chart data only, validates counts/indexes before allocating, and diagnoses unsupported chart types. External workbooks are never retrieved.
 
 Unsupported OOXML features are not retained as opaque package parts. Exports can therefore be structurally valid without preserving every feature of the source deck. See [Compatibility](compatibility.md).
 

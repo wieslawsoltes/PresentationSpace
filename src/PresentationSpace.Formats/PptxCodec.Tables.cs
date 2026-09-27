@@ -87,6 +87,10 @@ public static partial class PptxCodec
                 var p = tc.Element(A + "tcPr"); var body = tc.Element(A + "txBody");
                 var baseStyle = new TextStyle { FontSize = 20, VerticalAlignment = (string?)p?.Attribute("anchor") switch { "ctr" => VerticalAlignment.Middle, "b" => VerticalAlignment.Bottom, _ => VerticalAlignment.Top } };
                 baseStyle = ReadRunStyle(body?.Element(A + "p")?.Element(A + "pPr")?.Element(A + "defRPr") ?? body?.Element(A + "p")?.Element(A + "endParaRPr"), baseStyle, color);
+                var paragraphProperties = body?.Element(A + "p")?.Element(A + "pPr");
+                baseStyle = baseStyle with { Alignment = (string?)paragraphProperties?.Attribute("algn") switch { "ctr" => ParagraphAlignment.Center, "r" => ParagraphAlignment.Right, _ => ParagraphAlignment.Left },
+                    Bullets = paragraphProperties?.Element(A + "buChar") is not null,
+                    LineSpacing = Math.Clamp(Number(paragraphProperties?.Element(A + "lnSpc")?.Element(A + "spcPct"), "val", baseStyle.LineSpacing * 100000) / 100000, .1f, 10) };
                 var content = ReadRichText(new SlideShape { TextStyle = baseStyle }, body, color);
                 if ((textLength += content.Text.Length) > TableModel.MaxTextLength) throw new InvalidDataException("Table text exceeds the input limit.");
                 float Margin(string name, float fallback)
@@ -99,8 +103,14 @@ public static partial class PptxCodec
                 {
                     var line = p?.Element(A + name); if (line is null) return new();
                     string dash = (string?)line.Element(A + "prstDash")?.Attribute("val") ?? "solid";
-                    if (dash is not ("solid" or "dash" or "dot" or "sysDot")) unsupported = true;
-                    return new() { Color = color(line, "#D8DEE8"), Width = line.Element(A + "noFill") is not null ? 0 : Number(line, "w", Emu) / Emu,
+                    if (dash is not ("solid" or "dash" or "dot" or "sysDot") || line.Attribute("cmpd") is { Value: not "sng" }) unsupported = true;
+                    float width = 1;
+                    if (line.Attribute("w") is { } attribute)
+                    {
+                        if (!double.TryParse(attribute.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) || !double.IsFinite(value) || value < 0 || value / Emu > 100) throw new InvalidDataException("Invalid table border width.");
+                        width = (float)(value / Emu);
+                    }
+                    return new() { Color = color(line, "#D8DEE8"), Width = line.Element(A + "noFill") is not null ? 0 : width,
                         Dash = dash switch { "dash" => TableBorderDash.Dash, "dot" or "sysDot" => TableBorderDash.Dot, _ => TableBorderDash.Solid } };
                 }
                 var cell = new TableCell { Row = r, Column = c, RowSpan = rs, ColumnSpan = cs, Text = content.Text, TextStyle = baseStyle, TextRanges = content.TextRanges,
