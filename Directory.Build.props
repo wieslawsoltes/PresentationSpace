@@ -3,7 +3,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Wiesław Šoltés</Authors>
     <Company>PresentationSpace</Company>
     <RepositoryUrl>https://github.com/wieslawsoltes/PresentationSpace</RepositoryUrl>

@@ -149,17 +149,6 @@ public sealed partial class SlideRenderer : IDisposable
             yield return line;
         }
     }
-    private void DrawTable(SKCanvas c,SlideShape s)
-    {
-        int columns=Math.Clamp(s.TableColumns,1,100), rows=Math.Max(1,(s.Cells.Length+columns-1)/columns); var b=s.Bounds; float w=b.Width/columns,h=b.Height/rows;
-        using var paint=new SKPaint { IsAntialias=true };
-        using var line=new SKPaint { Color=Color("#D8DEE8"),Style=SKPaintStyle.Stroke,StrokeWidth=1 };
-        for(int row=0;row<rows;row++)for(int col=0;col<columns;col++)
-        {
-            var cell=new RectF(b.X+col*w,b.Y+row*h,w,h); paint.Color=Color(row==0?s.Fill:row%2==0?"#F1F4F8":"#FFFFFF"); c.DrawRect(cell.X,cell.Y,w,h,paint); c.DrawRect(cell.X,cell.Y,w,h,line);
-            int index=row*columns+col; if(index<s.Cells.Length)DrawText(c,s.Cells[index],cell,s.TextStyle with { FontSize=Math.Min(s.TextStyle.FontSize,Math.Max(9,h*.35f)),Color=row==0?"#FFFFFF":s.TextStyle.Color,Bold=row==0,VerticalAlignment=Core.VerticalAlignment.Middle },10);
-        }
-    }
     private SKImage? GetImage(PresentationDocument document,string? id)
     {
         if(id is null || !document.Assets.TryGetValue(id,out var asset))return null;
@@ -209,5 +198,5 @@ public sealed partial class SlideRenderer : IDisposable
         }
         return output.ToArray();
     }
-    public void Dispose(){foreach(var i in _images.Values)i.Image.Dispose();foreach(var f in _faces.Values)f.Dispose();_images.Clear();_faces.Clear();_imageBytes=0;}
+    public void Dispose(){_tableLayouts.Clear();foreach(var i in _images.Values)i.Image.Dispose();foreach(var f in _faces.Values)f.Dispose();_images.Clear();_faces.Clear();_imageBytes=0;}
 }
