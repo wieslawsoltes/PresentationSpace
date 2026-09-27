@@ -160,22 +160,6 @@ public sealed partial class SlideRenderer : IDisposable
             int index=row*columns+col; if(index<s.Cells.Length)DrawText(c,s.Cells[index],cell,s.TextStyle with { FontSize=Math.Min(s.TextStyle.FontSize,Math.Max(9,h*.35f)),Color=row==0?"#FFFFFF":s.TextStyle.Color,Bold=row==0,VerticalAlignment=Core.VerticalAlignment.Middle },10);
         }
     }
-    private void DrawChart(SKCanvas c,SlideShape s)
-    {
-        var b=s.Bounds; var values=s.Values.IsEmpty ? new float[]{42,68,54,89} : s.Values.ToArray(); int n=values.Length;
-        float min=Math.Min(0,values.Min()),max=Math.Max(1,values.Max()),range=Math.Max(1,max-min); var area=new RectF(b.X+40,b.Y+22,b.Width-55,b.Height-70);
-        using var grid=new SKPaint { Color=Color("#E2E6ED"),StrokeWidth=1,IsAntialias=true };
-        for(int i=0;i<=4;i++) {float y=area.Y+area.Height*i/4;c.DrawLine(area.X,y,area.Right,y,grid);DrawText(c,(max-range*i/4).ToString("0.#",CultureInfo.InvariantCulture),new(b.X,y-9,34,24),new(){FontSize=13,Color="#7C8492",Alignment=ParagraphAlignment.Right});}
-        float slot=area.Width/n,zero=area.Y+area.Height*max/range;
-        using var bar=new SKPaint{Color=Color(s.Fill),IsAntialias=true};
-        for(int i=0;i<n;i++)
-        {
-            float y=area.Y+area.Height*(max-values[i])/range,x=area.X+i*slot+slot*.2f,w=slot*.6f;
-            c.DrawRoundRect(new SKRect(x,Math.Min(zero,y),x+w,Math.Max(zero,y)),3,3,bar);
-            DrawText(c,values[i].ToString("0.#",CultureInfo.InvariantCulture),new(x-10,y-27,w+20,26),new(){FontSize=16,Color=s.TextStyle.Color,Bold=true,Alignment=ParagraphAlignment.Center});
-            DrawText(c,i<s.Labels.Length?s.Labels[i]:$"{i+1}",new(area.X+i*slot,area.Bottom+10,slot,35),new(){FontSize=16,Color="#667487",Alignment=ParagraphAlignment.Center});
-        }
-    }
     private SKImage? GetImage(PresentationDocument document,string? id)
     {
         if(id is null || !document.Assets.TryGetValue(id,out var asset))return null;

@@ -1,6 +1,6 @@
 # Compatibility and limitations
 
-PresentationSpace 0.2 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
+PresentationSpace 0.3 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
 
 ## Format matrix
 
@@ -15,7 +15,7 @@ PresentationSpace 0.2 is a development preview, not a complete or pixel-exact Po
 | Raster pictures | Embedded assets | PNG/JPEG/GIF/WebP subset | Embedded pictures |
 | Groups | Shared selection identifiers | Flattened; complex group transforms can differ | Flattened |
 | Tables | Cell strings and uniform grid | Cell text; styling, dimensions and spans simplified | Native DrawingML table with the app's uniform style |
-| Charts | One-series column chart | Cached values/labels/color for one unstacked column series | Native chart part with editable embedded XLSX workbook |
+| Charts | Immutable categories/series, nullable values, type and basic options | Column, bar, line, area, pie and doughnut caches; supported grouping/options | Native chart parts with every series and editable embedded XLSX workbooks |
 | Placeholder roles/indexes | Preserved | Roles/indexes and layout/master geometry fallback | Native placeholders and five predefined layout parts |
 | Speaker notes | Preserved | Body notes | Supported |
 | Local comments | Preserved | Not imported | Omitted with warning |
@@ -40,7 +40,17 @@ Rotated resizing pins the opposite handle. Marquee selection uses rotated axis-a
 
 Native table export preserves an editable table structure, with the app's uniform cells, header/banding and basic text style. Import does not retain arbitrary row heights, column widths, cell formatting, merged cells, table themes or formula/data links.
 
-Native chart export creates chart relationships, typed caches and an embedded workbook. Chart labels use string cells, including values beginning with `=`; the exporter does not turn labels into formulas. Import supports one unstacked column series and cached values. Multiple series, stacked/percentage charts, other chart families, uncached workbooks, full axes/legend/data-label styling and live data links remain unsupported. Missing cached points become zero with a warning. Unsupported chart types are omitted with a warning rather than silently selecting their first series. External data and assets are not fetched.
+Native chart export creates chart relationships, typed caches and an embedded workbook for column, horizontal bar, line, area, pie and doughnut charts. Column/bar grouping supports clustered, stacked and 100% stacked. Other chart types use standard grouping. Positive and negative ordinary stacks accumulate separately. Pie/doughnut charts require one series; those types and 100% stacked charts require non-negative data. Unsupported conversions fail visibly without discarding series.
+
+The model supports up to 32 series, 10,000 categories and 100,000 numeric positions per chart. Numeric values are finite doubles bounded to ±1e30. Missing values remain null, absent cache points and absent workbook cells rather than zero. Gap/Zero/Span are preserved; spanning affects line/area connections. New charts use a readable slide-relative size, a title/legend and white background. Chart-area color or transparency round-trips; legacy version-1 charts retain their transparent background. All-zero or all-missing circular charts display an empty-data state. Normalized axis calculations handle subnormal finite values without producing invalid geometry.
+
+Chart labels/names use string cells, including values beginning with `=`; no spreadsheet formulas execute. Workbook addresses work beyond column Z. Import reads cached values only; it does not execute embedded workbooks or fetch external data. Multiple supported series are preserved. Duplicate indexes/order and invalid counts are rejected before numeric-array allocation; combination charts, conflicting series categories and unsupported families are diagnosed rather than partially imported.
+
+This is not complete Excel/PowerPoint chart fidelity. Combination, scatter, bubble, radar, stock, surface and 3D charts; stacked line/area; multi-series circular charts; negative 100% stacks; multi-level categories; advanced axes, custom point/marker/data-label formatting, trendlines, error bars, live data links and Office-identical layout are unsupported. Circular slices use a fixed application palette, not imported per-point styles. Legends display the first 16 entries with an overflow count; labels are thinned on dense category axes and data labels are omitted above 50 numeric positions. Native Office may lay out the same chart differently.
+
+The Uno data editor is an explicit-apply quoted TSV control, not a spreadsheet grid. Paste tab-separated cells with a header, category labels in the first column and one column per series. Empty numeric cells stay missing. Apply (or Ctrl+Enter in the data field) commits the title, hole size and data as one undoable edit. Apply before closing the pane or changing selection; unapplied text is not part of the document/recovery snapshot. Type, grouping, legend, label and color commands apply the current valid draft. Formula text in numeric cells is rejected.
+
+New chart records serialize as native schema version 2. Earlier native documents remain readable; older application builds intentionally reject version 2. Legacy `Values`/`Labels` are compatibility projections, not the authoritative chart model. Keep the original PPTX because unsupported parts are not preserved opaquely.
 
 ## Remaining application boundaries
 
@@ -50,6 +60,6 @@ Slide-show mode fills the application viewport, not a second-display presenter c
 
 ## Defensive limits and verification
 
-Native/PPTX input: 64 MB. PPTX expansion: 128 MB total, 32 MB per part and 10,000 parts. Native documents: 2,000 slides and 20,000 shapes. Chart caches: 10,000 points, validated before allocation. Raster decode: 16 megapixels; image insertion: 20 MB. PNG export: at most 32 megapixels. DTDs and external retrieval are prohibited. Invalid/duplicate identifiers, non-finite geometry and malformed rich-text ranges are rejected.
+Native/PPTX input: 64 MB. PPTX expansion: 128 MB total, 32 MB per part and 10,000 parts. Native documents: 2,000 slides and 20,000 shapes. Charts: 32 series, 10,000 categories, 100,000 numeric positions, validated before numeric-array allocation; TSV input at most 2,097,152 characters with 32,767-character cells. Raster decode: 16 megapixels; image insertion: 20 MB. PNG export: at most 32 megapixels. DTDs and external retrieval are prohibited. Invalid/duplicate identifiers, non-finite geometry and malformed rich-text ranges are rejected.
 
 These are defensive limits, not performance guarantees. Headless tests cover data preservation, native chart/workbook/table schemas, rendering and geometry. Browser tests use actual keyboard input against the published Uno app. CI also compiles desktop targets; compilation is not equivalent to native interactive UI testing. Large-document performance, every browser/platform, touch-only operation, assistive technologies and PowerPoint-native visual/round-trip qualification need broader testing.

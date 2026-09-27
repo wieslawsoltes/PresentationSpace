@@ -34,11 +34,19 @@ Viewports apply fit/zoom/pan transforms and inverse-transform pointer input. Res
 
 ## Rendering
 
-`SlideRenderer` handles basic shapes, pictures, text, uniform tables and column charts. `DrawRichText` wraps styled word segments and uses their font metrics, color, emphasis, underline and paragraph properties. Oversized words are broken at text elements. Rendering does not claim complete complex-script shaping or Office typography equivalence.
+`SlideRenderer` handles basic shapes, pictures, text, uniform tables and six categorical chart types. `DrawRichText` wraps styled word segments and uses their font metrics, color, emphasis, underline and paragraph properties. Oversized words are broken at text elements. Rendering does not claim complete complex-script shaping or Office typography equivalence.
 
 Each renderer owns typeface and image caches; the image budget is 64 MB, and images over 16 megapixels are rejected. Native assets and font availability affect platform output. Editing is invalidation-driven. The slide-show timer runs during active basic effects and stops once they finish. Skia chooses its backend; this is not a fully GPU-resident engine or a qualified performance benchmark.
 
 PNG exports use sized raster surfaces. PDF exports use Skia's vector document canvas. Both consume the same slide model and renderer as the editor.
+
+## Chart model and authoring
+
+`ChartSpec` contains a categorical chart type, grouping, title, legend/data-label flags, blank-data policy, hole size, categories and immutable series. Series use nullable double values; null is distinct from zero. `ChartModel.Get` adapts version-1 fields without mutation, and `Apply` updates an authoritative chart record plus legacy projections. New chart data serializes as schema 2 to prevent old builds from quietly reading only the first-series projection.
+
+`ChartModel.Intervals` centralizes ordinary, positive/negative and percentage stacking. `ChartAxisScale` normalizes value magnitudes before choosing ticks, so subnormal inputs do not underflow into NaN axis geometry. `SlideRenderer.RenderChart` can render independently of a document. Editing, thumbnails, slide show and PNG/PDF consume that renderer. Native PPTX export consumes the same chart data and grouping rules rather than flattened primitives.
+
+`ChartDataEditor` is a session-independent Uno control with `SetValue` and `ValueChanged`. Its bounded quoted TSV parser validates the entire draft before emitting an immutable result. The host applies the result as one history transaction. Input fields require Apply/Ctrl+Enter before pane dismissal. Type conversions validate constraints before updating, and locked objects cannot be edited through the chart pane. Existing Shape Fill changes map to the first series; theme accent recoloring retains custom series colors.
 
 ## Native PPTX structures
 
@@ -46,7 +54,7 @@ Formats uses BCL ZIP/XML APIs with bounded input and explicit diagnostics. The p
 
 Text boxes emit `a:r` runs and paragraph properties. Placeholder roles/indexes and five generated layout parts connect to a generated master/theme. Import resolves omitted placeholder geometry through layout and master parts, and has partial style/background fallback; it is not full inherited-artwork/theme reconstruction.
 
-Uniform tables emit actual `a:tbl` graphic frames. Column charts emit chart parts with relationships, typed category/value caches and embedded XLSX packages. Each workbook uses inline strings for labels and numeric value cells; labels cannot become spreadsheet formulas. Import reads supported cached chart data only, validates counts/indexes before allocating, and diagnoses unsupported chart types. External workbooks are never retrieved.
+Uniform tables emit actual `a:tbl` graphic frames. Supported charts emit chart parts with relationships, typed category/value caches and embedded XLSX packages. Each workbook uses inline strings for labels and numeric value cells; missing points have no numeric cell, and labels cannot become spreadsheet formulas. Import reads supported cached chart data only, validates counts/indexes before allocating, and diagnoses unsupported chart types. External workbooks are never retrieved.
 
 Unsupported OOXML features are not retained as opaque package parts. Exports can therefore be structurally valid without preserving every feature of the source deck. See [Compatibility](compatibility.md).
 

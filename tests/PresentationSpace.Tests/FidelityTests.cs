@@ -192,10 +192,10 @@ public class FidelityTests
         var bytes = ChangePart(PptxCodec.Export(Deck(Chart())).Data, "ppt/charts/chart1_2.xml", root => root.Descendants(C + "numCache").Elements(C + "pt").Last().SetAttributeValue("idx", 0));
         Assert.Throws<InvalidDataException>(() => PptxCodec.Import(bytes));
     }
-    [Fact] public void UnsupportedMultiSeriesChartIsNotSilentlyReducedToOneSeries()
+    [Fact] public void DuplicateSeriesIdentifiersAreRejectedInsteadOfSilentlyDroppingSeries()
     {
         var bytes = ChangePart(PptxCodec.Export(Deck(Chart())).Data, "ppt/charts/chart1_2.xml", root => { var bars = root.Descendants(C + "barChart").Single(); bars.Add(new XElement(bars.Element(C + "ser")!)); });
-        var result = PptxCodec.Import(bytes); Assert.Empty(result.Document.Slides[0].Shapes); Assert.Contains(result.Warnings, w => w.Contains("unsupported chart"));
+        Assert.Throws<InvalidDataException>(() => PptxCodec.Import(bytes));
     }
     [Fact] public void AlternativeTextRoundTrips()
     {
