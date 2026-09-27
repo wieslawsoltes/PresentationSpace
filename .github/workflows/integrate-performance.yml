@@ -24,9 +24,9 @@ jobs:
           assert hashlib.sha256(patch).hexdigest() == '2461adc8587d798f30d08e199cb154d67a868265dba877654ae4077d5acb05d2'
           Path('/tmp/performance.patch').write_bytes(patch)
           PY
-          git apply --check /tmp/performance.patch
-          git apply /tmp/performance.patch
-          rm .ci/perf.*.xz .github/workflows/integrate-performance.yml
+          git apply --check --exclude=.github/workflows/build.yml /tmp/performance.patch
+          git apply --exclude=.github/workflows/build.yml /tmp/performance.patch
+          rm .ci/perf.*.xz
           rmdir .ci
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
