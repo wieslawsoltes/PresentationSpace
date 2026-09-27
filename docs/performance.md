@@ -30,7 +30,7 @@ Results are generated under `artifacts/performance` and uploaded by the Linux bu
 
 ## Direct table editing and measurement boundaries
 
-Double-click a slide cell to open native input. Enter/F2 edits a selected cell; Tab/Shift+Tab navigates merge origins; arrows move across cells and Shift extends the range. Ctrl+Enter commits, Escape cancels the current text draft, and focus loss commits. Undo remains transactional. Pending cell text is flushed by normal save/export/recovery operations. A concurrently replaced or deleted table is never overwritten by a stale cell editor.
+Double-click a slide cell to open native input. Enter/F2 edits a selected cell; Tab/Shift+Tab navigates merge origins; arrows move across cells and Shift extends the range. Ctrl+Enter commits, Escape cancels the current text draft, and focus loss commits. Undo remains transactional. Save and export flush pending cell text. Automatic local recovery stores committed document edits, not an active input draft; commit with Ctrl+Enter or move focus before relying on recovery. A concurrently replaced or deleted table is never overwritten by a stale cell editor.
 
 The plain input overlay does not display individual rich styles while typing. Character-range styles are retained in the document and shown by Skia after commit. Inserted text uses reconciliation rather than full Office insertion-style semantics; bidirectional shaping, IME behavior and assistive technologies need additional qualification.
 
