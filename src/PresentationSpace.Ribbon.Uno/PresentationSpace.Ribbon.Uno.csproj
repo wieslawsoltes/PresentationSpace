@@ -3,7 +3,7 @@
     <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
     <TargetFrameworks Condition="'$(PresentationTargetFrameworks)' != ''">$(PresentationTargetFrameworks)</TargetFrameworks>
     <UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures>
-    <Description>Reusable Office-style ribbon tabs, groups and command controls for Uno Platform.</Description>
-    <IsPackable>true</IsPackable>
+    <OutputType>Library</OutputType><GenerateLibraryLayout>true</GenerateLibraryLayout>
+    <Description>Reusable Office-style ribbon tabs, groups and command controls for Uno Platform.</Description><IsPackable>true</IsPackable>
   </PropertyGroup>
 </Project>

@@ -2,7 +2,8 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
     <TargetFrameworks Condition="'$(PresentationTargetFrameworks)' != ''">$(PresentationTargetFrameworks)</TargetFrameworks>
-    <UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures><IsPackable>true</IsPackable>
+    <UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures>
+    <OutputType>Library</OutputType><GenerateLibraryLayout>true</GenerateLibraryLayout><IsPackable>true</IsPackable>
     <Description>Embeddable Office-style presentation editing workspace with pluggable storage for Uno Platform.</Description>
   </PropertyGroup>
   <ItemGroup>

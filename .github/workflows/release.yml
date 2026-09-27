@@ -1,0 +1,95 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release
+  desktop:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish self-contained desktop
+        shell: bash
+        run: dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-desktop -r ${{ matrix.rid }} --self-contained true -c Release -p:PresentationTargetFrameworks=net10.0-desktop -p:Version=${GITHUB_REF_NAME#v} -o artifacts/app
+      - name: Archive distribution
+        shell: bash
+        run: python -c "import shutil; shutil.make_archive('PresentationSpace-${{ github.ref_name }}-${{ matrix.rid }}', 'zip', 'artifacts/app')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.rid }}
+          path: '*.zip'
+  packages:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet workload install wasm-tools --skip-manifest-update
+      - name: Pack independently reusable libraries
+        shell: bash
+        run: |
+          for project in Core Formats Rendering.Skia Ribbon.Uno Controls.Uno Editor.Uno; do
+            dotnet pack "src/PresentationSpace.$project/PresentationSpace.$project.csproj" -c Release -p:Version=${GITHUB_REF_NAME#v} -o artifacts/packages
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages/*.nupkg
+  browser:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet workload install wasm-tools --skip-manifest-update
+      - name: Publish browser archive
+        run: |
+          dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-browserwasm -c Release -p:PresentationTargetFrameworks=net10.0-browserwasm -p:Version=${GITHUB_REF_NAME#v} -p:WasmShellWebAppBasePath=/ -o artifacts/browser
+          python3 tools/prepare-pages.py artifacts/browser artifacts/site
+          python3 -c "import shutil; shutil.make_archive('PresentationSpace-${{ github.ref_name }}-browser', 'zip', 'artifacts/site')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-release
+          path: '*.zip'
+  publish:
+    needs: [desktop, packages, browser]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release-assets/*.zip release-assets/*.nupkg --verify-tag --generate-notes --title "PresentationSpace $GITHUB_REF_NAME"
