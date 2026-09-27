@@ -10,11 +10,8 @@ public sealed partial class SlideRenderer
     private sealed record TextPiece(string Text, TextStyle Style, float Width);
     private sealed record TextLine(List<TextPiece> Pieces, TextStyle Style, float Width, float Ascent, float Height);
 
-    /// <summary>Wraps mixed-style words, preserving run fonts, metrics, color and underline.</summary>
-    public void DrawRichText(SKCanvas canvas, SlideShape shape, float padding = 3)
+    private List<TextLine> BuildRichTextLines(SlideShape shape, float width)
     {
-        var bounds = shape.Bounds;
-        float width = Math.Max(1, bounds.Width - padding * 2);
         var fonts = new Dictionary<TextStyle, SKFont>();
         SKFont Font(TextStyle style)
         {
@@ -66,9 +63,35 @@ public sealed partial class SlideRenderer
                 }
                 Finish(); offset += paragraph.Length + 1;
             }
-            float total = lines.Sum(line => line.Height);
-            float available = Math.Max(1, bounds.Height - padding * 2);
-            float y = bounds.Y + padding + (shape.TextStyle.VerticalAlignment switch { Core.VerticalAlignment.Middle => Math.Max(0, (available - total) / 2), Core.VerticalAlignment.Bottom => Math.Max(0, available - total), _ => 0 });
+            return lines;
+        }
+        finally { foreach (var font in fonts.Values) font.Dispose(); }
+    }
+
+    /// <summary>Measures the same mixed-style line layout used by drawing; does not mutate the shape.</summary>
+    public float MeasureRichTextHeight(SlideShape shape, float width, float padding = 0)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        if (!float.IsFinite(width) || width <= 0 || !float.IsFinite(padding) || padding < 0) throw new ArgumentOutOfRangeException(nameof(width));
+        return BuildRichTextLines(shape, Math.Max(1, width - 2 * padding)).Sum(line => line.Height) + 2 * padding;
+    }
+
+    /// <summary>Draws mixed-style text using the same layout and font metrics as row auto-fit.</summary>
+    public void DrawRichText(SKCanvas canvas, SlideShape shape, float padding = 3)
+    {
+        var bounds = shape.Bounds; float width = Math.Max(1, bounds.Width - padding * 2);
+        var lines = BuildRichTextLines(shape, width);
+        var fonts = new Dictionary<TextStyle, SKFont>();
+        SKFont Font(TextStyle style)
+        {
+            if (!fonts.TryGetValue(style, out var font)) fonts[style] = font = new SKFont(Face(style), style.FontSize) { Edging = SKFontEdging.SubpixelAntialias, Subpixel = true };
+            return font;
+        }
+        float total = lines.Sum(line => line.Height);
+        float available = Math.Max(1, bounds.Height - padding * 2);
+        float y = bounds.Y + padding + (shape.TextStyle.VerticalAlignment switch { Core.VerticalAlignment.Middle => Math.Max(0, (available - total) / 2), Core.VerticalAlignment.Bottom => Math.Max(0, available - total), _ => 0 });
+        try
+        {
             canvas.Save();
             try
             {

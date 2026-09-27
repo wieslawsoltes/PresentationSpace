@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — accelerated canvas and direct table editing
+
+- Replace raster-backed canvas controls with direct-composited Uno `SKCanvasElement` for slide editing, previews and presentation playback.
+- Recycle viewport-bounded filmstrip and sorter tiles with keyboard navigation and drag/drop reordering.
+- Retain bounded local-coordinate shape pictures and static scenes, with content-aware invalidation and rendering diagnostics.
+- Reconcile single-slide edits incrementally and cache selected-shape lookups.
+- Add direct table-cell text input, range selection, Tab/arrow navigation and character formatting with undo/redo.
+- Add content-driven row auto-fit using shared rich-text measurement, including merged spans and rotated table anchors.
+- Add a public 1,000-slide sample, real-input browser stress checks, pixel/cache regressions, and reproducible same-driver CPU/raster baseline comparisons.
+- No full PowerPoint parity, lossless PPTX or physical-GPU benchmark claim. See compatibility and performance documentation.
+
 ## 0.4.0 — development preview
 
 ### Added

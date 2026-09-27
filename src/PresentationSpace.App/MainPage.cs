@@ -14,6 +14,7 @@ public sealed class MainPage : Page
         Content = _editor;
         _editor.Session.Changed += (_, _) => UpdateDiagnostics();
         _editor.ViewChanged += (_, _) => UpdateDiagnostics();
+        GotFocus += (_, _) => UpdateDiagnostics();
         Loaded += async (_, _) =>
         {
             if (_initialized) return;
@@ -30,6 +31,11 @@ public sealed class MainPage : Page
     {
 #if __WASM__
         var session = _editor.Session;
+        var cell = _editor.Viewport.ActiveTableRange;
+        var focused = XamlRoot is null ? null : Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        string focusName = Uri.EscapeDataString(focused is null ? "" : Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(focused) + ":" + focused.GetType().Name);
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-focus-id',decodeURIComponent('{focusName}')); ");
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-filmstrip-allocated','{_editor.AllocatedFilmstripTiles}');document.documentElement.setAttribute('data-sorter-allocated','{_editor.AllocatedSorterTiles}');document.documentElement.setAttribute('data-filmstrip-realized','{_editor.RealizedFilmstripTiles}');document.documentElement.setAttribute('data-sorter-realized','{_editor.RealizedSorterTiles}');document.documentElement.setAttribute('data-table-cell-row','{cell?.Row ?? -1}');document.documentElement.setAttribute('data-table-cell-column','{cell?.Column ?? -1}');document.documentElement.setAttribute('data-primary-height','{session.PrimaryShape?.Bounds.Height.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? ""}');document.documentElement.setAttribute('data-canvas-backend','SKCanvasElement');");
         string title = Uri.EscapeDataString(session.Document.Title + " — PresentationSpace");
         string layout = Uri.EscapeDataString(session.CurrentSlide.LayoutName ?? "");
         var chart = session.PrimaryShape?.Kind == ShapeKind.Chart ? ChartModel.Get(session.PrimaryShape) : null;

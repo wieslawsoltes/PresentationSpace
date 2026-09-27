@@ -19,11 +19,18 @@ public sealed partial class SlideRenderer : IDisposable
 
     public void Render(SKCanvas canvas, PresentationDocument document, Slide slide, float animationTime = float.PositiveInfinity)
     {
+        PrepareCache();
+        if (float.IsPositiveInfinity(animationTime) && DrawRetainedScene(canvas, document, slide)) return;
+        RenderContents(canvas, document, slide, animationTime);
+    }
+    private void RenderContents(SKCanvas canvas, PresentationDocument document, Slide slide, float animationTime)
+    {
         canvas.Save();
         try
         {
             canvas.ClipRect(new(0, 0, document.Width, document.Height));
-            canvas.Clear(Color(slide.Background, SKColors.White));
+            using (var background = new SKPaint { Color = Color(slide.Background, SKColors.White) })
+                canvas.DrawRect(0, 0, document.Width, document.Height, background);
             foreach (var shape in slide.Shapes)
             {
                 if (shape.Hidden || shape.Opacity <= 0) continue;
@@ -40,10 +47,10 @@ public sealed partial class SlideRenderer : IDisposable
                     {
                         using var layer = new SKPaint { Color = SKColors.White.WithAlpha((byte)(255 * opacity)) };
                         canvas.SaveLayer(layer);
-                        try { DrawShape(canvas, document, shape); }
+                        try { DrawRetainedShape(canvas, document, shape); }
                         finally { canvas.Restore(); }
                     }
-                    else DrawShape(canvas, document, shape);
+                    else DrawRetainedShape(canvas, document, shape);
                 }
                 finally { canvas.Restore(); }
             }
@@ -198,5 +205,5 @@ public sealed partial class SlideRenderer : IDisposable
         }
         return output.ToArray();
     }
-    public void Dispose(){_tableLayouts.Clear();foreach(var i in _images.Values)i.Image.Dispose();foreach(var f in _faces.Values)f.Dispose();_images.Clear();_faces.Clear();_imageBytes=0;}
+    public void Dispose(){ClearRenderCache();_tableLayouts.Clear();foreach(var i in _images.Values)i.Image.Dispose();foreach(var f in _faces.Values)f.Dispose();_images.Clear();_faces.Clear();_imageBytes=0;}
 }

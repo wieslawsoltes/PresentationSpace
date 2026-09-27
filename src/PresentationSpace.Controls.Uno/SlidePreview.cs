@@ -2,24 +2,38 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
-using SkiaSharp.Views.Windows;
+
 namespace PresentationSpace.Controls.Uno;
 
+/// <summary>Invalidates only for slide drawing dependencies, not selection, notes, names or comments.</summary>
 public sealed class SlidePreview : UserControl
 {
-    private readonly SKXamlCanvas _canvas=new();
-    private readonly SlideRenderer _renderer=new();
+    private readonly PresentationCanvas _canvas = new();
+    private readonly SlideRenderer _renderer;
+    private readonly bool _ownsRenderer;
     private PresentationDocument? _document;
     private Slide? _slide;
-    public SlidePreview(){Content=_canvas;_canvas.PaintSurface+=Paint;SizeChanged+=(_,_)=>_canvas.Invalidate();Unloaded+=(_,_)=>_renderer.Dispose();}
-    public void SetSlide(PresentationDocument document,Slide slide)
+    public long DrawCount => _canvas.DrawCount;
+    public SlidePreview() : this(new SlideRenderer(), true) { }
+    internal SlidePreview(SlideRenderer renderer, bool ownsRenderer = false)
     {
-        if(ReferenceEquals(_slide,slide)&&_document?.Width==document.Width&&_document?.Height==document.Height)return;
-        _document=document;_slide=slide;_canvas.Invalidate();
+        _renderer = renderer; _ownsRenderer = ownsRenderer; Content = _canvas;
+        _canvas.Draw += (_, e) =>
+        {
+            if (_document is not { } document || _slide is not { } slide) return;
+            e.Canvas.Save();
+            try { e.Canvas.Scale((float)e.Size.Width / document.Width, (float)e.Size.Height / document.Height); _renderer.Render(e.Canvas, document, slide); }
+            finally { e.Canvas.Restore(); }
+        };
+        SizeChanged += (_, _) => _canvas.Invalidate();
+        Unloaded += (_, _) => { if (_ownsRenderer) _renderer.Dispose(); };
     }
-    private void Paint(object? sender,SKPaintSurfaceEventArgs e)
+    public void SetSlide(PresentationDocument document, Slide slide)
     {
-        if(_document is not {} d||_slide is not {} slide)return;
-        var c=e.Surface.Canvas;c.ResetMatrix();c.Save();c.Scale(e.Info.Width/d.Width,e.Info.Height/d.Height);_renderer.Render(c,d,slide);c.Restore();
+        bool changed = _slide?.Shapes != slide.Shapes || _slide?.Background != slide.Background ||
+            _document?.Width != document.Width || _document?.Height != document.Height || !ReferenceEquals(_document?.Assets, document.Assets);
+        _document = document; _slide = slide;
+        if (changed) _canvas.Invalidate();
     }
+    public void Clear() { _document = null; _slide = null; }
 }

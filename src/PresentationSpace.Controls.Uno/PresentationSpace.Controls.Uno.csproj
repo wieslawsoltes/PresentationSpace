@@ -10,6 +10,9 @@
     <ProjectReference Include="../PresentationSpace.Core/PresentationSpace.Core.csproj" />
     <ProjectReference Include="../PresentationSpace.Rendering.Skia/PresentationSpace.Rendering.Skia.csproj" />
     <ProjectReference Include="../PresentationSpace.Ribbon.Uno/PresentationSpace.Ribbon.Uno.csproj" />
-    <PackageReference Include="SkiaSharp.Views.Uno.WinUI" Version="3.119.2" />
+    <PackageReference Include="Uno.WinUI.Graphics2DSK" Version="6.7.135" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-browserwasm'">
+    <PackageReference Include="Uno.Foundation.Runtime.WebAssembly" Version="6.7.135" />
   </ItemGroup>
 </Project>

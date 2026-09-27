@@ -28,6 +28,7 @@ public sealed partial class SlideViewport
     {
         get
         {
+            if (CurrentTableTextStyle() is { } cellStyle) return cellStyle;
             CaptureTextSelection();
             if (Session?.PrimaryShape is not { } selected) return null;
             var shape = _textDraft is { } draft && draft.Id == selected.Id ? draft : selected;
@@ -48,6 +49,7 @@ public sealed partial class SlideViewport
     private void FormatTextCore(string label, Func<TextStyle, TextStyle> format, bool paragraph)
     {
         ArgumentNullException.ThrowIfNull(format);
+        if (FormatTableText(label, format, paragraph)) { Refresh(); return; }
         CaptureTextSelection(); CommitText();
         if (Session is not { } session) return;
         if (_textSelection is { } selection && (selection.Length > 0 || paragraph) && selection.SlideId == session.CurrentSlide.Id && session.Selection.Count == 1 && session.PrimaryShape is { Locked: false } shape && selection.ShapeId == shape.Id)

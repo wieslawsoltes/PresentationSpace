@@ -75,3 +75,9 @@ Ribbon tabs/groups/buttons have no document-engine dependency. Viewport, preview
 File saving and recovery are distinct: a recovery write does not mark an unsaved portable file as saved. Canceled file saves return false. No cloud account, coauthoring service or identity layer is implied by recovery or Share.
 
 Browser diagnostics expose counts/state for tests, not document mutation APIs. Browser tests exercise keyboard input, check rendered pixels and collect screenshots; headless tests verify data invariants and export schemas. Add model/validation behavior to Core, rendering to Rendering.Skia, interchange to Formats and controls to Controls.Uno. Keep unsupported behavior visible and add regression tests before exposing commands.
+
+## Accelerated and retained rendering (0.5)
+
+`PresentationCanvas` uses Uno Graphics2DSK `SKCanvasElement` rather than a raster-backed XAML canvas. Shape pictures and static scenes are retained with explicit budgets and content keys; image assets stay in their own cache. `VirtualSlideView` shares a renderer among recycled filmstrip/sorter tiles. `VirtualSlideLayout` is UI-independent and reusable. See [Performance](performance.md) for cache semantics and reproducible measurement.
+
+Direct table-cell input uses the shared `TableLayout` and inverse rotation hit testing. Drafts commit through `EditorSession`, refusing stale table replacements. Row auto-fit uses the renderer's shared wrapped rich-text line measurement and returns a new immutable table plus total height.

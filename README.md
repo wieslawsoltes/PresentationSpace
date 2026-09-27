@@ -14,17 +14,17 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.4 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.5 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
 
-## What is new in 0.4
+## What is new in 0.5
 
-**Merged cells with preserved content.** Merge a rectangular selection without dropping text or mixed character styles. Split it back into its underlying grid, insert/delete rows and columns through merges, set relative track sizes, and distribute rows or columns equally. A surviving merge retains its content even when its origin row or column is deleted.
+**Accelerated composition and bounded slide views.** The viewport, previews and player now draw with Uno `SKCanvasElement`, preserving the compositor's transform and clip instead of copying a separate `SKXamlCanvas` raster surface. Filmstrip and sorter recycle visible tiles plus a small overscan/reuse pool instead of constructing a control for every slide.
 
-**A reusable table authoring control.** The Uno `TableDataEditor` provides cell/range/row/column selection, a bounded grid navigator, explicit cell-text commits, per-cell fills and text formatting, cell margins, border widths/styles/colors, and header/banding/total-row options. Valid changes are emitted as immutable snapshots and integrated as undoable edits. Text input is a plain TextBox, not inline slide-cell WYSIWYG editing.
+**Retained drawing and incremental edits.** Local-coordinate Skia pictures reuse unchanged text/table/chart drawing across movement and rotation. A retained scene handles repeated static drawing; bounded caches invalidate on content, size, font-provider or scene changes. One-slide edits no longer reconcile the entire deck, and repeated selection/style lookup avoids unnecessary scans. See [Performance](docs/performance.md) for the benchmark method, cache budgets and measurement boundaries.
 
-**Native interchange and shared rendering.** PPTX tables retain row/column proportions, rectangular merges, supported rich text, margins and explicit cell formatting. Import checks merge origins and continuations against a bounded grid. Skia uses the same model for editing, slide show, PNG/PDF and standalone `RenderTable`. Native schema 3 prevents older builds from silently flattening merged cells; schemas 1 and 2 remain readable.
+**Direct table-cell editing and row auto-fit.** Double-click a table cell on the slide, or use **Edit table cell on slide** in command search. Arrow keys navigate cells, Shift extends a range, Enter/F2 opens text input, and Tab commits then moves to the next cell. Ctrl+Enter commits; Escape cancels the current input draft. Character-range formatting and undo/redo preserve unaffected styles. **Auto-fit table rows** measures the shared text layout and fits rows, including merged spans, as one undoable edit. Typing still uses a plain native TextBox overlay, not fully styled WYSIWYG input or complete Office typography.
 
-Global find/replace includes table origins and preserves cell styles. Shape formatting changes only the requested properties, and theme accents retain explicit custom cell colors. The 0.3 six-type chart pipeline and earlier layout/rich-text features remain available. See [Compatibility](docs/compatibility.md) for the supported subset and [Changelog](CHANGELOG.md) for earlier work.
+Use **Open large-deck sample** to load a reproducible 1,000-slide workspace, **Focus slide thumbnails** / **Focus slide sorter** for keyboard navigation, and **Rendering statistics** for draw callback and cache counters. The sample asks before discarding unsaved work. CPU callback timing is not GPU duration or FPS. The earlier rich-text, layouts, native chart/workbook and merged-table features remain available.
 
 ## The workspace
 
@@ -173,7 +173,7 @@ Select a table and open **Format Shape → Table design & layout**, or search **
 
 ## Files, privacy and recovery
 
-Native `.pspace` preserves this application's model, including mixed text, notes, local comments and animation settings. Structured tables use schema version 3 and charts require at least version 2, so older builds reject unsupported structure rather than silently losing it. Version 0.4 reads schemas 1, 2 and 3. PNG/PDF are delivery formats. PPTX supports real text runs, preset shapes, embedded pictures, merged/styled native tables, native supported multi-series charts, notes and basic transitions. It does not preserve arbitrary unsupported OOXML parts.
+Native `.pspace` preserves this application's model, including mixed text, notes, local comments and animation settings. Structured tables use schema version 3 and charts require at least version 2, so older builds reject unsupported structure rather than silently losing it. Version 0.5 reads schemas 1, 2 and 3. PNG/PDF are delivery formats. PPTX supports real text runs, preset shapes, embedded pictures, merged/styled native tables, native supported multi-series charts, notes and basic transitions. It does not preserve arbitrary unsupported OOXML parts.
 
 Editing needs no account or server. **AutoSave means device-local recovery, not OneDrive, cloud backup or coauthoring.** Download a native file for durable storage. Browser storage can be cleared or evicted. Share exports files.
 
@@ -204,8 +204,8 @@ Browser/OS interception can vary; ribbon alternatives are available. Search incl
 
 The normal workflows are deliberately limited to three responsibilities:
 
-- **Build and test:** Linux, Windows and macOS matrix; headless editing/geometry/rendering tests, native serialization, PPTX round trips, independent Open XML validation of presentations and chart workbooks, and desktop compilation.
-- **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping and table editing/merge/track workflows, screenshots, six-library packaging and Pages deployment.
+- **Build and test:** Linux, Windows and macOS matrix; headless editing/geometry/rendering tests, native serialization, PPTX round trips, independent Open XML validation of presentations and chart workbooks, desktop compilation, and same-runner CPU/raster baseline comparisons.
+- **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping table editing/merge/track workflows, direct on-slide cell input, row auto-fit and bounded 1,000-slide navigation, screenshots, six-library packaging and Pages deployment.
 - **Release:** tag-triggered tests, self-contained desktop distributions, browser output, NuGet artifacts and a GitHub Release. Tagged release execution and signing are separate from ordinary build checks.
 
 Read each run's results rather than treating configured coverage as completed qualification. Tests establish behavior for their covered cases, not every PowerPoint file, accessibility standard, GPU, browser or production-scale workload.

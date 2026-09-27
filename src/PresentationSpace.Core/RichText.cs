@@ -10,18 +10,24 @@ public static class RichText
 
     public static TextStyle StyleAt(SlideShape shape, int index)
     {
-        foreach (var range in shape.TextRanges)
-            if (index >= range.Start && index < range.Start + range.Length) return range.Style;
+        int found = FirstRangeEndingAfter(shape.TextRanges, index);
+        if (found < shape.TextRanges.Length && index >= shape.TextRanges[found].Start) return shape.TextRanges[found].Style;
         return shape.TextStyle;
+    }
+    private static int FirstRangeEndingAfter(ImmutableArray<TextRangeStyle> ranges, int index)
+    {
+        int lo = 0, hi = ranges.Length;
+        while (lo < hi) { int mid = lo + (hi - lo) / 2; if (ranges[mid].Start + ranges[mid].Length <= index) lo = mid + 1; else hi = mid; }
+        return lo;
     }
 
     public static IEnumerable<TextRangeStyle> Segments(SlideShape shape, int start, int length)
     {
         if (start < 0 || length < 0 || start > shape.Text.Length - length) throw new ArgumentOutOfRangeException(nameof(start));
         int end = start + length, position = start;
-        foreach (var range in shape.TextRanges)
+        for (int i = FirstRangeEndingAfter(shape.TextRanges, start); i < shape.TextRanges.Length; i++)
         {
-            if (range.Start + range.Length <= position) continue;
+            var range = shape.TextRanges[i];
             if (range.Start >= end) break;
             if (range.Start > position) { yield return new(position, Math.Min(end, range.Start) - position, shape.TextStyle); position = range.Start; }
             int stop = Math.Min(end, range.Start + range.Length);
@@ -68,7 +74,7 @@ public static class RichText
     // Existing controls edit flat text or a shape's base style. Carry explicit ranges through those changes.
     public static SlideShape Reconcile(SlideShape before, SlideShape after)
     {
-        if (before.TextRanges.IsEmpty || before.TextRanges != after.TextRanges) return after;
+        if (ReferenceEquals(before, after) || before.TextRanges.IsEmpty || before.TextRanges != after.TextRanges || (before.Text == after.Text && before.TextStyle == after.TextStyle)) return after;
         var adjusted = before;
         if (before.Text != after.Text)
         {
@@ -100,15 +106,37 @@ public static class RichText
         LineSpacing = old.LineSpacing == value.LineSpacing ? style.LineSpacing : value.LineSpacing
     };
 
+    public static Slide Reconcile(Slide before, Slide after)
+    {
+        if (ReferenceEquals(before, after) || before.Shapes == after.Shapes) return after;
+        Dictionary<Guid, SlideShape>? lookup = null;
+        ImmutableArray<SlideShape>.Builder? changed = null;
+        for (int i = 0; i < after.Shapes.Length; i++)
+        {
+            var shape = after.Shapes[i];
+            SlideShape? old = i < before.Shapes.Length && before.Shapes[i].Id == shape.Id ? before.Shapes[i] :
+                (lookup ??= before.Shapes.ToDictionary(x => x.Id)).GetValueOrDefault(shape.Id);
+            if (old is null || ReferenceEquals(old, shape)) continue;
+            var result = Reconcile(old, TableModel.Reconcile(old, shape));
+            if (!ReferenceEquals(result, shape)) (changed ??= after.Shapes.ToBuilder())[i] = result;
+        }
+        return changed is null ? after : after with { Shapes = changed.ToImmutable() };
+    }
+
     public static PresentationDocument Reconcile(PresentationDocument before, PresentationDocument after)
     {
         if (ReferenceEquals(before, after) || before.Slides == after.Slides) return after;
-        var previousSlides = before.Slides.ToDictionary(s => s.Id);
-        return after with { Slides = after.Slides.Select(slide =>
+        Dictionary<Guid, Slide>? lookup = null;
+        ImmutableArray<Slide>.Builder? changed = null;
+        for (int i = 0; i < after.Slides.Length; i++)
         {
-            if (!previousSlides.TryGetValue(slide.Id, out var previous) || previous.Shapes == slide.Shapes) return slide;
-            var shapes = previous.Shapes.ToDictionary(s => s.Id);
-            return slide with { Shapes = slide.Shapes.Select(shape => shapes.TryGetValue(shape.Id, out var old) ? Reconcile(old, TableModel.Reconcile(old, shape)) : shape).ToImmutableArray() };
-        }).ToImmutableArray() };
+            var slide = after.Slides[i];
+            Slide? old = i < before.Slides.Length && before.Slides[i].Id == slide.Id ? before.Slides[i] :
+                (lookup ??= before.Slides.ToDictionary(x => x.Id)).GetValueOrDefault(slide.Id);
+            if (old is null || ReferenceEquals(old, slide)) continue;
+            var result = Reconcile(old, slide);
+            if (!ReferenceEquals(result, slide)) (changed ??= after.Slides.ToBuilder())[i] = result;
+        }
+        return changed is null ? after : after with { Slides = changed.ToImmutable() };
     }
 }
