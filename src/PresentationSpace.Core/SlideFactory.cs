@@ -7,12 +7,17 @@ public static class SlideFactory
     public static Slide Create(string layout, float w = 1280, float h = 720)
     {
         var title = Text("Click to add title",w * .07f,h * .08f,w * .86f,h * .17f,44);
-        return new() { Name = layout, Shapes = layout switch {
+        var slide = new Slide { Name = layout, LayoutName = layout, Shapes = layout switch {
             "Blank" => [],
             "Title slide" => [Text("Click to add title",w*.09f,h*.32f,w*.82f,h*.2f,56),Text("Click to add subtitle",w*.09f,h*.55f,w*.82f,h*.15f,28)],
             "Title only" => [title],
             "Two content" => [title,Text("Click to add text",w*.07f,h*.3f,w*.4f,h*.58f),Text("Click to add text",w*.53f,h*.3f,w*.4f,h*.58f)],
             _ => [title,Text("Click to add text",w*.07f,h*.3f,w*.86f,h*.58f)] } };
+        return slide with { Shapes = slide.Shapes.Select((shape, index) => shape with
+        {
+            Placeholder = index == 0 ? PlaceholderKind.Title : layout == "Title slide" ? PlaceholderKind.Subtitle : PlaceholderKind.Body,
+            PlaceholderIndex = index
+        }).ToImmutableArray() };
     }
     public static PresentationDocument Welcome()
     {

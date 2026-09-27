@@ -76,10 +76,10 @@ public sealed partial class PresentationEditor : UserControl
     private void OnSessionChanged(object? sender,EditorChangedEventArgs e)
     {
         _syncing=true;_documentName.Text=Session.Document.Title;_saveState.Text=Session.IsDirty?"• Edited":"✓";
-        if(_fontFamily is not null)_fontFamily.SelectedItem=Session.PrimaryShape?.TextStyle.FontFamily??"Arial";
-        if(_fontSize is not null)_fontSize.SelectedItem=(Session.PrimaryShape?.TextStyle.FontSize??28).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
+        if(_fontFamily is not null)_fontFamily.SelectedItem=(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.FontFamily??"Arial";
+        if(_fontSize is not null)_fontSize.SelectedItem=((Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.FontSize??28).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
         void Mark(RibbonCommandButton? button,bool active){if(button is not null)button.Background=active?OfficePalette.Brush("F4D9CC"):OfficePalette.Brush("00FFFFFF");}
-        Mark(_bold,Session.PrimaryShape?.TextStyle.Bold==true);Mark(_italic,Session.PrimaryShape?.TextStyle.Italic==true);Mark(_underline,Session.PrimaryShape?.TextStyle.Underline==true);_syncing=false;
+        Mark(_bold,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Bold==true);Mark(_italic,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Italic==true);Mark(_underline,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Underline==true);_syncing=false;
         if(!e.IsPreview&&!ReferenceEquals(_observed,Session.Document)){_observed=Session.Document;if(_autoSave&&Storage is not null){_recoveryTimer.Stop();_recoveryTimer.Start();_status.Message="Saving local recovery…";}}
         _status.SetZoom(Viewport.Zoom);
     }
@@ -96,13 +96,13 @@ public sealed partial class PresentationEditor : UserControl
     private void HandleKey(object sender,KeyRoutedEventArgs e)
     {
         if(IsPresenting)return;bool ctrl=Key(VirtualKey.Control),shift=Key(VirtualKey.Shift),alt=Key(VirtualKey.Menu);
-        if(ctrl&&e.Key==VirtualKey.S)Run(SaveNativeAsync);else if(ctrl&&e.Key==VirtualKey.O)Run(OpenAsync);else if(ctrl&&e.Key==VirtualKey.M)NewSlide();else if(e.Key==VirtualKey.F5)StartShow(!shift);else if(alt&&e.Key==VirtualKey.Q)_search.Focus(FocusState.Programmatic);else if(e.Key==VirtualKey.Escape&&_backstage?.Visibility==Visibility.Visible)CloseBackstage();else return;e.Handled=true;
+        if(ctrl&&e.Key==VirtualKey.S)Run(SaveNativeAsync);else if(ctrl&&e.Key==VirtualKey.O)Run(OpenAsync);else if(ctrl&&e.Key==VirtualKey.M)NewSlide();else if(e.Key==VirtualKey.F5)StartShow(!shift);else if(alt&&e.Key==VirtualKey.Q)FocusCommandSearch();else if(e.Key==VirtualKey.Escape&&_backstage?.Visibility==Visibility.Visible)CloseBackstage();else return;e.Handled=true;
     }
     private void BuildCommands()
     {
         _commands.AddRange([("New slide",()=>NewSlide()),("Open presentation",()=>Run(OpenAsync)),("Save presentation",()=>Run(SaveNativeAsync)),("Insert text box",()=>Insert(ShapeKind.Text)),("Insert rectangle",()=>Insert(ShapeKind.Rectangle)),("Insert picture",()=>Run(InsertPictureAsync)),("Insert table",()=>Insert(ShapeKind.Table)),("Insert chart",()=>Insert(ShapeKind.Chart)),("Undo",()=>Session.Undo()),("Redo",()=>Session.Redo()),("Find and replace",()=>Run(FindReplaceAsync)),("Slide sorter",ShowSorter),("Normal view",ShowNormal),("Selection pane",()=>ShowInspector(InspectorMode.Selection)),("Format shape",()=>ShowInspector(InspectorMode.Format)),("Comments",()=>ShowInspector(InspectorMode.Comments)),("Start slide show",()=>StartShow(true)),("Export PowerPoint",()=>Run(()=>ExportAsync("pptx"))),("Export PDF",()=>Run(()=>ExportAsync("pdf"))),("Export PNG",()=>Run(()=>ExportAsync("png")))]);
         _search.TextChanged+=(_,e)=>{if(e.Reason==AutoSuggestionBoxTextChangeReason.UserInput)_search.ItemsSource=_commands.Where(c=>c.Title.Contains(_search.Text,StringComparison.OrdinalIgnoreCase)).Select(c=>c.Title).Take(10).ToArray();};
-        _search.QuerySubmitted+=(_,e)=>{string query=e.ChosenSuggestion as string??e.QueryText;var match=_commands.FirstOrDefault(c=>c.Title.Equals(query,StringComparison.OrdinalIgnoreCase));if(match.Execute is not null){_search.Text="";match.Execute();}else Notice("Choose a command from the search suggestions.");};
+        _search.QuerySubmitted+=SubmitCommand;
     }
     private static Button SmallButton(string text,Action action){var b=new Button{Content=text,FontSize=11,Padding=new(11,4,11,4),MinHeight=29,CornerRadius=new(4),Background=OfficePalette.Brush("00FFFFFF"),BorderThickness=new(0)};b.Click+=(_,_)=>action();return b;}
     private static Button Quick(string label,string glyph,Action action){var b=new Button{Content=new FontIcon{Glyph=glyph,FontSize=14},Padding=new(4),MinWidth=25,MinHeight=27,Background=OfficePalette.Brush("00FFFFFF"),BorderThickness=new(0)};ToolTipService.SetToolTip(b,label);AutomationProperties.SetName(b,label);b.Click+=(_,_)=>action();return b;}

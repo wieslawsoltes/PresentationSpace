@@ -5,7 +5,7 @@ using SkiaSharp;
 namespace PresentationSpace.Rendering.Skia;
 
 /// <summary>Disposable, single-thread-affine renderer. Coordinates are 96-DPI slide units.</summary>
-public sealed class SlideRenderer : IDisposable
+public sealed partial class SlideRenderer : IDisposable
 {
     private sealed record CachedImage(SKImage Image, string Source, long Bytes, long Used);
     private readonly Dictionary<string, CachedImage> _images = [];
@@ -103,7 +103,11 @@ public sealed class SlideRenderer : IDisposable
             case ShapeKind.Chart: DrawChart(c,s); break;
             default: c.DrawRect(r,fill); if(s.StrokeWidth>0)c.DrawRect(r,stroke); break;
         }
-        if (!string.IsNullOrEmpty(s.Text)) DrawText(c,s.Text,b,s.TextStyle,s.Kind == ShapeKind.Text ? 3 : 12);
+        if (!string.IsNullOrEmpty(s.Text))
+        {
+            if (s.TextRanges.IsEmpty) DrawText(c,s.Text,b,s.TextStyle,s.Kind == ShapeKind.Text ? 3 : 12);
+            else DrawRichText(c,s,s.Kind == ShapeKind.Text ? 3 : 12);
+        }
     }
     public void DrawText(SKCanvas c, string text, RectF b, TextStyle style, float padding = 3)
     {

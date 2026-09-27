@@ -75,12 +75,12 @@ public sealed class EditorSession
     public void SelectAll() { Selection = CurrentSlide.Shapes.Where(s => !s.Locked && !s.Hidden).Select(s => s.Id).ToImmutableHashSet(); Notify(true); }
     public void SelectRect(RectF bounds, bool additive = false)
     {
-        var ids = CurrentSlide.Shapes.Where(s => !s.Locked && !s.Hidden && bounds.Intersects(s.Bounds)).Select(s => s.Id);
+        var ids = CurrentSlide.Shapes.Where(s => !s.Locked && !s.Hidden && bounds.Intersects(Geometry.VisualBounds(s))).Select(s => s.Id);
         Selection = additive ? Selection.Union(ids) : ids.ToImmutableHashSet(); Notify(true);
     }
     public void EditDocument(string label, Func<PresentationDocument, PresentationDocument> edit)
     {
-        CommitGesture(); var before = Capture(); Document = edit(Document); SlideIndex = Math.Clamp(SlideIndex, 0, Document.Slides.Length - 1);
+        CommitGesture(); var before = Capture(); Document = RichText.Reconcile(Document, edit(Document)); SlideIndex = Math.Clamp(SlideIndex, 0, Document.Slides.Length - 1);
         Selection = Selection.Intersect(CurrentSlide.Shapes.Select(s => s.Id)); Push(label, before);
     }
     public void EditSlide(string label, Func<Slide, Slide> edit) => EditDocument(label, d => d with { Slides = d.Slides.SetItem(SlideIndex, edit(d.Slides[SlideIndex])) });
@@ -168,6 +168,6 @@ public sealed class EditorSession
     public void ReplaceText(string find, string replacement)
     {
         if (string.IsNullOrEmpty(find)) return;
-        EditDocument("Replace text", d => d with { Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => x with { Text = x.Text.Replace(find,replacement,StringComparison.OrdinalIgnoreCase) }).ToImmutableArray() }).ToImmutableArray() });
+        EditDocument("Replace text", d => d with { Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => RichTextEditing.ReplaceAll(x, find, replacement)).ToImmutableArray() }).ToImmutableArray() });
     }
 }

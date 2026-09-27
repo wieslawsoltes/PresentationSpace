@@ -10,26 +10,25 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  validate:
+    name: Test and desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - name: Unit and interoperability tests
+      - name: Unit, rendering and interoperability tests
         run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release --logger trx --results-directory artifacts/test-results
+      - name: Build native desktop app
+        run: dotnet build src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-desktop -c Release -p:PresentationTargetFrameworks=net10.0-desktop
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: artifacts/test-results
-  desktop:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-      - name: Build native desktop app
-        run: dotnet build src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-desktop -c Release -p:PresentationTargetFrameworks=net10.0-desktop
