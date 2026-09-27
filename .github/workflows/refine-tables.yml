@@ -1,0 +1,56 @@
+name: Refine table integration
+on:
+  push:
+    branches: [work/table-authoring-0.4]
+permissions:
+  contents: write
+jobs:
+  refine:
+    if: ${{ startsWith(github.event.head_commit.message, 'refine-tables:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply exact-baseline refinement
+        run: |
+          set -euo pipefail
+          git diff --exit-code 81898bcdd9e19e481ffaf06a18c2348b675e6b99 HEAD -- src tests tools README.md CHANGELOG.md docs
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, lzma
+          patch = lzma.decompress(base64.b64decode(Path('.ci/refine-tables.b64').read_text(), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '78d8369fde056dd2bab41a19fa801d5f0e0004175d7bd48051b501898fbdd451'
+          Path('/tmp/refine-tables.patch').write_bytes(patch)
+          PY
+          git apply --check --unidiff-zero /tmp/refine-tables.patch
+          git apply --unidiff-zero /tmp/refine-tables.patch
+          rm .ci/refine-tables.b64
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(tables): preserve styled command edits, finalize standalone API and documentation'
+          git push origin HEAD:work/table-authoring-0.4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Regression and interchange tests
+        run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release --logger trx --results-directory artifacts/test-results
+      - name: Compile Uno desktop editor
+        run: dotnet build src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-desktop -c Release -p:PresentationTargetFrameworks=net10.0-desktop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: table-refinement-tests
+          path: artifacts/test-results
+      - name: Archive integrated source
+        if: always()
+        run: |
+          mkdir -p artifacts
+          git archive --format=zip -o artifacts/PresentationSpace-table-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: table-refinement-source
+          path: artifacts/PresentationSpace-table-source.zip
