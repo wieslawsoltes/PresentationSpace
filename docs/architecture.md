@@ -8,38 +8,52 @@ App ──> Editor.Uno ──> Controls.Uno ──> Rendering.Skia ──> Core
                └────> Formats ────────────────────────> Core
 ```
 
-Core and Formats target `net10.0`. Rendering targets `net10.0` and references SkiaSharp. Uno libraries target browser WebAssembly and native desktop, with an explicit `Library` output type and generated library layout metadata.
+Core and Formats target `net10.0` without UI dependencies. Rendering adds SkiaSharp. Uno libraries target browser WebAssembly and native desktop, with explicit Library output and generated library layout metadata. No library references App. Storage is injected through `IWorkspaceStorage`.
 
-## Document and transaction model
+## Documents and transactions
 
-Documents, slides, styles and shapes are immutable records. Collections use immutable arrays/dictionaries. Images are stored once as document assets and referred to by ID. Undo stores structurally shared document snapshots rather than copying an entire image payload for every pointer movement.
+Documents, slides, shapes and styles are immutable records. Collections are immutable arrays/dictionaries. Images are document assets referenced by ID. Undo retains structurally shared snapshots, not a copied image payload per pointer move. History is bounded to 150 commands.
 
-`EditorSession` is the command boundary. A normal command captures before/after state. A pointer transform uses `BeginGesture`, `PreviewShapes`, and `CommitGesture`; previews are computed from the gesture's original geometry and produce one history entry on release. Cancellation restores the original document. History is bounded to 150 commands. Callbacks distinguish preview changes from committed changes, avoiding a recovery write on every pointer event.
+`EditorSession` is the command boundary. Pointer transforms use `BeginGesture`, `PreviewShapes`, `CommitGesture` and cancellation. Every preview starts from original geometry and one history entry is committed on release. Selection and active slide are not serialized. Preview notifications do not schedule a recovery write on every pointer event. Sessions and renderers are confined to their owning thread.
 
-Selection and active-slide state are separate from the serializable document. Grouping uses a group identifier and shared selection; it is not a nested transform hierarchy. Renderers and sessions should be confined to their owning thread.
+## Rich text and input drafts
 
-## Geometry and coordinates
+`SlideShape.Text` is the canonical string, `TextStyle` its fallback style, and `TextRanges` the ordered explicit overrides. Ranges use UTF-16 positions, are non-overlapping/in bounds, and do not split surrogate pairs. Native JSON validation enforces these invariants. Missing additive properties in earlier native documents use their defaults.
 
-Slides use 96-DPI logical units. The default page is 1280 × 720. Viewports apply an explicit fit/zoom transform, then draw the document and selection overlays. Pointer positions are transformed back into document space. Rotated hit testing inverse-transforms the point into each object's local rectangle. Images are fit within their bounds; cropping and arbitrary image effects are not implemented.
+`RichText` exposes segment iteration, range formatting, replacement and reconciliation. Adjacent equal overrides are compacted; overrides equal to the base style need not be stored. Reconciliation carries ranges through existing flat-text controls and propagates changed base-style properties without removing unrelated mixed styling. Replacing arbitrary text as one wholesale change still has a narrower preservation contract than structured operations.
+
+`RichTextEditing.ReplaceAll` locates non-overlapping matches and streams copied/replacement segments through one StringBuilder, retaining untouched styles without rebuilding the entire text for each occurrence. Paragraph formatting expands a selection to its paragraph boundaries.
+
+`SlideViewport` keeps a private immutable text draft. TextBox changes update the draft incrementally; committing creates one document edit with final text/ranges. Range selection is retained when a ribbon command takes focus. Character and paragraph formatting share public viewport APIs. The input overlay remains a plain TextBox; mixed visual styling is rendered on the Skia canvas after commit. This is not a complete text-shaping, caret-style or rich-edit control.
+
+## Layout mapping and geometry
+
+Slides use 96-DPI logical units; default dimensions are 1280 × 720. `SlideFactory` tags predefined placeholders with role/index. `SlideLayoutEngine.Apply` maps compatible placeholders and moves their bounds while preserving IDs, direct text formatting and content. Unmatched objects remain in their original z-order. Blank keeps content and placeholder roles, enabling later remapping. This model is not a full slide-master/layout/theme inheritance graph.
+
+Viewports apply fit/zoom/pan transforms and inverse-transform pointer input. Resize deltas are evaluated in local object coordinates. `ResizeRotated` translates the result so the opposite handle remains stationary in slide coordinates. `VisualBounds` computes the rotated axis-aligned extent used for marquee selection. Selection groups use identifiers rather than nested transforms.
 
 ## Rendering
 
-`SlideRenderer` handles shapes, wrapped text, images, simple tables and bar charts. It owns a typeface cache and a 64 MB image-cache budget; images over 16 megapixels are rejected before use. PNG export rasterizes to an explicitly sized surface; PDF uses Skia's vector document canvas. Font availability and Skia fallback affect rendering across systems.
+`SlideRenderer` handles basic shapes, pictures, text, uniform tables and column charts. `DrawRichText` wraps styled word segments and uses their font metrics, color, emphasis, underline and paragraph properties. Oversized words are broken at text elements. Rendering does not claim complete complex-script shaping or Office typography equivalence.
 
-Rendering is invalidation-driven for editing. The slide-show timer runs while an entry effect/transition is active and stops when its duration has elapsed. This is not a qualified rendering benchmark or a claim of full GPU residency; Skia chooses its backend, and export uses CPU-accessible surfaces.
+Each renderer owns typeface and image caches; the image budget is 64 MB, and images over 16 megapixels are rejected. Native assets and font availability affect platform output. Editing is invalidation-driven. The slide-show timer runs during active basic effects and stops once they finish. Skia chooses its backend; this is not a fully GPU-resident engine or a qualified performance benchmark.
 
-## Reusable controls
+PNG exports use sized raster surfaces. PDF exports use Skia's vector document canvas. Both consume the same slide model and renderer as the editor.
 
-`RibbonControl`, `RibbonGroup`, and `RibbonCommandButton` do not reference the document engine. `SlideViewport`, `SlideFilmstrip`, `FormatPane`, `NotesPane`, `SlideSorter`, `PresentationStatusBar`, `PaneSplitter`, `ColorPalette`, and `PresentationPlayer` are individually consumable controls. Session controls detach event handlers when unloaded.
+## Native PPTX structures
 
-`PresentationEditor` composes these controls and provides the complete workspace. Storage is injected through `IWorkspaceStorage`. A host may replace pickers, persistence or recovery without changing the renderer or document model.
+Formats uses BCL ZIP/XML APIs with bounded input and explicit diagnostics. The production library does not require the Open XML SDK; tests use that SDK as an independent schema validator.
 
-## Storage and interoperability
+Text boxes emit `a:r` runs and paragraph properties. Placeholder roles/indexes and five generated layout parts connect to a generated master/theme. Import resolves omitted placeholder geometry through layout and master parts, and has partial style/background fallback; it is not full inherited-artwork/theme reconstruction.
 
-Native JSON uses generated `System.Text.Json` metadata and validates input. PPTX uses BCL ZIP/XML APIs with explicit package limits and diagnostics. It does not launch Office, use a remote conversion service, or evaluate embedded content. The Open XML SDK is used only by the test project to independently validate exported package schemas.
+Uniform tables emit actual `a:tbl` graphic frames. Column charts emit chart parts with relationships, typed category/value caches and embedded XLSX packages. Each workbook uses inline strings for labels and numeric value cells; labels cannot become spreadsheet formulas. Import reads supported cached chart data only, validates counts/indexes before allocating, and diagnoses unsupported chart types. External workbooks are never retrieved.
 
-Save-to-file and local recovery have different semantics: recovery does not mark an unsaved portable file as saved. The host returns a boolean for file save so cancellation is not misreported as success.
+Unsupported OOXML features are not retained as opaque package parts. Exports can therefore be structurally valid without preserving every feature of the source deck. See [Compatibility](compatibility.md).
 
-## Extending the system
+## Reusable components and persistence
 
-Add model data and validation in Core, command behavior in `EditorSession`, rendering in Rendering.Skia, format handling in Formats, and controls in Controls.Uno. Add headless regression tests before wiring a ribbon command. Document any interchange approximation. Do not introduce a reference from a reusable library to App or hide unsupported behavior behind a no-op command.
+Ribbon tabs/groups/buttons have no document-engine dependency. Viewport, previews, filmstrip, sorter, formatting/selection/comment pane, notes, color palette, splitters, status bar and slide-show player are individual Uno controls. Session controls detach their event handlers when unloaded. `PresentationEditor` composes the workspace and accepts a storage adapter.
+
+File saving and recovery are distinct: a recovery write does not mark an unsaved portable file as saved. Canceled file saves return false. No cloud account, coauthoring service or identity layer is implied by recovery or Share.
+
+Browser diagnostics expose counts/state for tests, not document mutation APIs. Browser tests exercise keyboard input, check rendered pixels and collect screenshots; headless tests verify data invariants and export schemas. Add model/validation behavior to Core, rendering to Rendering.Skia, interchange to Formats and controls to Controls.Uno. Keep unsupported behavior visible and add regression tests before exposing commands.
