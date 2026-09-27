@@ -128,7 +128,7 @@ public sealed partial class PresentationEditor
 
     private async Task RenameAsync()
     {
-        var text = new TextBox { Text = Session.Document.Title, MaxLength = 120, MinWidth = 320 };
+        var text = new TextBox { Text = Session.Document.Title, MaxLength = 120, MinWidth = 0, Width = Math.Min(320, Math.Max(160, ActualWidth - 88)) };
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = "Presentation name", Content = text, PrimaryButtonText = "Rename", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(text.Text))
             Session.EditDocument("Rename presentation", document => document with { Title = text.Text.Trim() });
@@ -136,7 +136,7 @@ public sealed partial class PresentationEditor
 
     private async Task FindReplaceAsync()
     {
-        var find = new TextBox { Header = "Find", PlaceholderText = "Text to find", MinWidth = 340 };
+        var find = new TextBox { Header = "Find", PlaceholderText = "Text to find", MinWidth = 0, Width = Math.Min(340, Math.Max(160, ActualWidth - 88)) };
         var replacement = new TextBox { Header = "Replace with", PlaceholderText = "Replacement text" };
         var body = new StackPanel { Spacing = 15 };
         body.Children.Add(find);
@@ -193,7 +193,7 @@ public sealed partial class PresentationEditor
             Background = OfficePalette.Brush("FBFAF9"),
             ColumnDefinitions =
             {
-                new() { Width = new GridLength(190) },
+                new() { Width = new GridLength(ActualWidth < 640 ? 136 : 190) },
                 new() { Width = new GridLength(1, GridUnitType.Star) }
             }
         };
@@ -217,8 +217,8 @@ public sealed partial class PresentationEditor
         Nav("Export PNG", () => Run(() => ExportAsync("png")));
         Nav("About", () => Run(() => MessageAsync("About PresentationSpace", "An independent Uno Platform / SkiaSharp presentation editor. MIT licensed. PowerPoint is a trademark of Microsoft; this application is not affiliated with Microsoft.")));
         _backstage.Children.Add(nav);
-        var content = new StackPanel { Margin = new(48, 38, 48, 38), Spacing = 22 };
-        content.Children.Add(OfficePalette.Text("Good ideas start here.", 32, true));
+        var content = new StackPanel { Margin = new(20, 24, 20, 24), Spacing = 22 };
+        content.Children.Add(new TextBlock { Text = "Good ideas start here.", FontSize = 28, TextWrapping = TextWrapping.Wrap, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         content.Children.Add(new TextBlock { Text = "Create a presentation, open an existing file, or explore the sample deck.", FontSize = 14, Foreground = OfficePalette.Muted, TextWrapping = TextWrapping.Wrap });
         var cards = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22 };
         foreach (bool sample in new[] { false, true })

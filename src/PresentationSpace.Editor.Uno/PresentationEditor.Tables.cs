@@ -15,7 +15,7 @@ public sealed partial class PresentationEditor
             if (Session.PrimaryShape is not { Kind: ShapeKind.Table } || Session.Selection.Count != 1) { Notice("Select one table first."); return; }
             // Keep the current editor and its range when invoking a table command from command search.
             if (_format.TableEditor is null) ShowInspector(InspectorMode.Format);
-            else _formatColumn.Width = new GridLength(296);
+            else { _inspectorOpen = true; ApplyEditorLayout(); }
             if (_format.TableEditor is { } table)
             {
                 execute(table);
@@ -33,5 +33,12 @@ public sealed partial class PresentationEditor
         Add("Insert table column", t => t.InsertColumn());
         Add("Delete table row", t => t.DeleteRow());
         Add("Delete table column", t => t.DeleteColumn());
+        foreach(var preset in Enum.GetValues<TableStylePreset>())
+            Add("Table style " + preset, t => t.ApplyTableStyle(preset));
+        foreach(var scope in Enum.GetValues<TableBorderScope>())
+            Add("Table borders " + scope, t => t.ApplyBorderScope(scope));
+        Add("Table toggle first column", t => t.ToggleFirstColumn());
+        Add("Table toggle last column", t => t.ToggleLastColumn());
+        Add("Table toggle banded columns", t => t.ToggleBandedColumns());
     }
 }

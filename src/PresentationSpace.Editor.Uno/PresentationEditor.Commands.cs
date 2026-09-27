@@ -12,9 +12,18 @@ public sealed partial class PresentationEditor
     private void FocusCommandSearch()
     {
         if (_commandQueued) return;
-        _search.ApplyTemplate();
-        _search.Focus(FocusState.Programmatic);
-        FindSearchTextBox(_search)?.SelectAll();
+        void Focus(AutoSuggestBox search)
+        {
+            search.ApplyTemplate(); search.Focus(FocusState.Programmatic);
+            FindSearchTextBox(search)?.SelectAll();
+        }
+        if (_search.Visibility == Visibility.Visible) Focus(_search);
+        else if (_moreQuick is not null)
+        {
+            _compactSearch.Width = Math.Clamp(ActualWidth - 64, 200, 440);
+            _searchFlyout.ShowAt(_moreQuick);
+            DispatcherQueue.TryEnqueue(() => Focus(_compactSearch));
+        }
     }
 
     private static TextBox? FindSearchTextBox(DependencyObject parent)
@@ -32,18 +41,19 @@ public sealed partial class PresentationEditor
         var match = _commands.FirstOrDefault(command => command.Title.Equals(query, StringComparison.OrdinalIgnoreCase));
         if (match.Execute is null) { Notice("Choose a command from the search suggestions."); return; }
         _commandQueued = true;
-        _search.IsSuggestionListOpen = false;
+        sender.IsSuggestionListOpen = false;
         // Leave the AutoSuggestBox event before changing focus and clearing its native input.
         // Otherwise its final input synchronization can restore the just-submitted query.
         if (!DispatcherQueue.TryEnqueue(() =>
         {
             try
             {
+                if (ReferenceEquals(sender, _compactSearch)) _searchFlyout.Hide();
                 Viewport.Focus(FocusState.Programmatic);
-                if (FindSearchTextBox(_search) is { } input) input.Text = "";
-                _search.Text = "";
-                _search.ItemsSource = null;
-                _search.IsSuggestionListOpen = false;
+                if (FindSearchTextBox(sender) is { } input) input.Text = "";
+                sender.Text = "";
+                sender.ItemsSource = null;
+                sender.IsSuggestionListOpen = false;
                 // A command may focus a newly-created text editor; do not steal that focus afterward.
                 match.Execute();
                 CommandExecutionVersion++;

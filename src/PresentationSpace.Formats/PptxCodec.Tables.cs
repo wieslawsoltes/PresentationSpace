@@ -10,7 +10,7 @@ public static partial class PptxCodec
     private static XElement NativeTable(SlideShape shape, int id)
     {
         var table = TableModel.Get(shape); var layout = new TableLayout(table, shape.Bounds);
-        var xml = new XElement(A + "tbl", new XElement(A + "tblPr", V("firstRow", table.HeaderRow ? 1 : 0), V("bandRow", table.BandedRows ? 1 : 0), V("lastRow", table.TotalRow ? 1 : 0)),
+        var xml = new XElement(A + "tbl", new XElement(A + "tblPr", V("firstRow", table.HeaderRow ? 1 : 0), V("bandRow", table.BandedRows ? 1 : 0), V("lastRow", table.TotalRow ? 1 : 0), V("firstCol", table.FirstColumn ? 1 : 0), V("lastCol", table.LastColumn ? 1 : 0), V("bandCol", table.BandedColumns ? 1 : 0)),
             new XElement(A + "tblGrid", Enumerable.Range(0, table.ColumnCount).Select(c => new XElement(A + "gridCol", V("w", Math.Max(1, E(layout.X[c + 1] - layout.X[c])))))));
         for (int r = 0; r < table.RowCount; r++)
         {
@@ -67,7 +67,7 @@ public static partial class PptxCodec
         var cells = ImmutableArray.CreateBuilder<TableCell>(); var owners = new TableCell?[rows.Length * columns.Length];
         long textLength = 0; var props = xml.Element(A + "tblPr");
         var table = new TableSpec { ColumnWidths = columns.Select(c => Size(c, "w")).ToImmutableArray(), RowHeights = rows.Select(r => Size(r, "h")).ToImmutableArray(),
-            HeaderRow = props is not null && Flag(props, "firstRow"), BandedRows = props is not null && Flag(props, "bandRow"), TotalRow = props is not null && Flag(props, "lastRow") };
+            HeaderRow = props is not null && Flag(props, "firstRow"), BandedRows = props is not null && Flag(props, "bandRow"), TotalRow = props is not null && Flag(props, "lastRow"), FirstColumn = props is not null && Flag(props, "firstCol"), LastColumn = props is not null && Flag(props, "lastCol"), BandedColumns = props is not null && Flag(props, "bandCol") };
         bool unsupported = xml.Descendants().Any(e => e.Name == A + "gradFill" || e.Name == A + "blipFill" || e.Name == A + "pattFill" || e.Name == A + "lnTlToBr" || e.Name == A + "lnBlToTr" || e.Name == A + "cell3D");
         for (int r = 0; r < rows.Length; r++)
         {

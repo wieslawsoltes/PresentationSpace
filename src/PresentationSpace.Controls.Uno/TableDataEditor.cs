@@ -12,7 +12,7 @@ using Windows.UI.Core;
 namespace PresentationSpace.Controls.Uno;
 
 /// <summary>Session-independent table authoring. A bounded grid navigator and validated immutable edits.</summary>
-public sealed class TableDataEditor : UserControl
+public sealed partial class TableDataEditor : UserControl
 {
     private const int PageRows = 8, PageColumns = 4;
     private readonly Grid _grid = new() { RowSpacing = 2, ColumnSpacing = 2 };
@@ -53,6 +53,7 @@ public sealed class TableDataEditor : UserControl
         var distribute = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         distribute.Children.Add(Button("Equal rows", () => Change(t => TableModel.Distribute(t, true)))); distribute.Children.Add(Button("Equal columns", () => Change(t => TableModel.Distribute(t, false)))); panel.Children.Add(distribute);
         panel.Children.Add(_header); panel.Children.Add(_bands); panel.Children.Add(_total);
+        BuildDesignControls(panel);
         panel.Children.Add(new TextBlock { Text = "Table accent", FontSize = 12 }); var accent = new ColorPalette(); accent.ColorSelected += (_, color) => Change(t => t with { Accent = color }); panel.Children.Add(accent);
         panel.Children.Add(Button("Reset cell formatting", () => Change(t => TableModel.EditCells(t, _range, c => c with { Fill = null, TextStyle = null, TextRanges = [], Left = new(), Right = new(), Top = new(), Bottom = new() }))));
         panel.Children.Add(new TextBlock { Text = "Selected cell fill", FontSize = 12 }); var fill = new ColorPalette(); fill.ColorSelected += (_, color) => Change(t => TableModel.EditCells(t, _range, c => c with { Fill = color })); panel.Children.Add(fill);
@@ -64,9 +65,11 @@ public sealed class TableDataEditor : UserControl
         panel.Children.Add(_margin); panel.Children.Add(Button("Apply cell margins", () => Change(t => TableModel.EditCells(t, _range, c => c with { MarginLeft = Number(_margin), MarginRight = Number(_margin), MarginTop = Number(_margin), MarginBottom = Number(_margin) }))));
         panel.Children.Add(_fontSize); panel.Children.Add(Button("Apply font size", () => FormatText(s => s with { FontSize = Number(_fontSize) })));
         panel.Children.Add(_horizontal); panel.Children.Add(_vertical); panel.Children.Add(_borderWidth); panel.Children.Add(_dash);
-        panel.Children.Add(new TextBlock { Text = "All selected borders", FontSize = 12 }); var borders = new ColorPalette(); borders.ColorSelected += (_, color) => Change(t => TableModel.EditCells(t, _range, c =>
-        { var border = new TableBorder { Color = color, Width = Number(_borderWidth), Dash = (TableBorderDash)Math.Max(0, _dash.SelectedIndex) }; return c with { Left = border, Right = border, Top = border, Bottom = border }; })); panel.Children.Add(borders);
-        panel.Children.Add(Button("No selected borders", () => Change(t => TableModel.EditCells(t, _range, c => c with { Left = new() { Width = 0 }, Right = new() { Width = 0 }, Top = new() { Width = 0 }, Bottom = new() { Width = 0 } }))));
+        panel.Children.Add(_borderScope);
+        panel.Children.Add(new TextBlock { Text = "Border color · applies chosen edges", FontSize = 12, TextWrapping = TextWrapping.Wrap });
+        var borders = new ColorPalette(); borders.ColorSelected += (_, color) => { _borderColor = color; ApplyBorderScope((TableBorderScope)Math.Max(0, _borderScope.SelectedIndex)); }; panel.Children.Add(borders);
+        panel.Children.Add(Button("Apply selected borders", () => ApplyBorderScope((TableBorderScope)Math.Max(0, _borderScope.SelectedIndex))));
+        panel.Children.Add(Button("No selected borders", () => ApplyBorderScope(TableBorderScope.None)));
         _header.Click += (_, _) => Change(t => t with { HeaderRow = _header.IsChecked == true });
         _bands.Click += (_, _) => Change(t => t with { BandedRows = _bands.IsChecked == true });
         _total.Click += (_, _) => Change(t => t with { TotalRow = _total.IsChecked == true });
@@ -79,7 +82,7 @@ public sealed class TableDataEditor : UserControl
     private static bool Key(VirtualKey key) => (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key) & CoreVirtualKeyStates.Down) != 0;
     private static Button Button(string title, Action action)
     {
-        var button = new Button { Content = title, FontSize = 11, Padding = new(7, 5, 7, 5), MinHeight = 28 }; AutomationProperties.SetName(button, title);
+        var button = new Button { Content = title, FontSize = 11, Padding = new(7, 5, 7, 5), MinHeight = 0, MinWidth = 0 }; AutomationProperties.SetName(button, title);
         button.Click += (_, _) => action(); return button;
     }
     private static float Number(TextBox box) => float.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) ? value : throw new InvalidDataException("Enter a finite number using a decimal point.");
@@ -133,6 +136,7 @@ public sealed class TableDataEditor : UserControl
             _rowSize.Text = _value.RowHeights[_row].ToString("0.##", CultureInfo.InvariantCulture); _columnSize.Text = _value.ColumnWidths[_column].ToString("0.##", CultureInfo.InvariantCulture); _fontSize.Text = style.FontSize.ToString("0.##", CultureInfo.InvariantCulture);
             _horizontal.SelectedIndex = (int)style.Alignment; _vertical.SelectedIndex = (int)style.VerticalAlignment;
             _header.IsChecked = _value.HeaderRow; _bands.IsChecked = _value.BandedRows; _total.IsChecked = _value.TotalRow;
+            _firstColumn.IsChecked = _value.FirstColumn; _lastColumn.IsChecked = _value.LastColumn; _bandColumns.IsChecked = _value.BandedColumns;
             _selection.Text = $"{_value.RowCount} rows × {_value.ColumnCount} columns · R{_range.Row + 1}C{_range.Column + 1} : R{_range.Bottom}C{_range.Right}";
             _pageRow = _row / PageRows * PageRows; _pageColumn = _column / PageColumns * PageColumns; BuildGrid();
         }
@@ -144,7 +148,7 @@ public sealed class TableDataEditor : UserControl
         int rows = Math.Min(PageRows, _value.RowCount - _pageRow), columns = Math.Min(PageColumns, _value.ColumnCount - _pageColumn);
         _grid.ColumnDefinitions.Add(new() { Width = new GridLength(24) });
         for (int c = 0; c < columns; c++) _grid.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        for (int r = 0; r <= rows; r++) _grid.RowDefinitions.Add(new() { Height = new GridLength(r == 0 ? 25 : 34) });
+        for (int r = 0; r <= rows; r++) _grid.RowDefinitions.Add(new() { Height = new GridLength(r == 0 ? 28 : 34) });
         void Add(UIElement item, int r, int c) { Grid.SetRow(item, r); Grid.SetColumn(item, c); _grid.Children.Add(item); }
         for (int c = 0; c < columns; c++) { int column = _pageColumn + c; Add(Button((column + 1).ToString(), () => { _column = column; SelectColumn(); }), 0, c + 1); }
         for (int r = 0; r < rows; r++) { int row = _pageRow + r; Add(Button((row + 1).ToString(), () => { _row = row; SelectRow(); }), r + 1, 0); }

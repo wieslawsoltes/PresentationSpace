@@ -10,3 +10,4 @@ test-results/
 *.user
 *.suo
 .DS_Store
+__pycache__/

@@ -91,7 +91,7 @@ public sealed class FormatPane : SessionControl
                 Number("Font size",shape.TextStyle.FontSize,v=>s.Apply("Font size",x=>x with{TextStyle=x.TextStyle with{FontSize=Math.Clamp(v,1,512)}}));Palette(color=>s.Apply("Text color",x=>x with{TextStyle=x.TextStyle with{Color=color}}));
                 Choice("Vertical alignment",Enum.GetNames<Core.VerticalAlignment>(),shape.TextStyle.VerticalAlignment.ToString(),value=>s.Apply("Text vertical alignment",x=>x with{TextStyle=x.TextStyle with{VerticalAlignment=Enum.Parse<Core.VerticalAlignment>(value)}}));
             }
-            Section("Arrange");var arrange=new StackPanel{Orientation=Orientation.Horizontal,Spacing=6};arrange.Children.Add(Button("Bring forward",s.BringToFront));arrange.Children.Add(Button("Send backward",s.SendToBack));_body.Children.Add(arrange);
+            Section("Arrange");var arrange=new StackPanel{Spacing=6};arrange.Children.Add(Button("Bring to front",s.BringToFront));arrange.Children.Add(Button("Send to back",s.SendToBack));_body.Children.Add(arrange);
         }
         finally{_building=false;}
     }
@@ -122,7 +122,7 @@ public sealed class FormatPane : SessionControl
     private void Section(string title)=>_body.Children.Add(OfficePalette.Text(title,12,true));
     private void Hint(string text)=>_body.Children.Add(new TextBlock{Text=text,FontSize=11,TextWrapping=TextWrapping.Wrap,Foreground=OfficePalette.Muted});
     private void Palette(Action<string> selected){var p=new ColorPalette();p.ColorSelected+=(_,color)=>selected(color);_body.Children.Add(p);}
-    private static Button Button(string label,Action action){var b=new Button{Content=label,FontSize=11,Padding=new(7,5,7,5),HorizontalAlignment=HorizontalAlignment.Left};b.Click+=(_,_)=>action();return b;}
+    private static Button Button(string label,Action action){var b=new Button{Content=new TextBlock{Text=label,TextTrimming=TextTrimming.CharacterEllipsis},MinWidth=0,MinHeight=0,FontSize=11,Padding=new(7,5,7,5),HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Left};Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b,label);b.Click+=(_,_)=>action();return b;}
     private void ActionButton(string label,Action action)=>_body.Children.Add(Button(label,action));
     private static StackPanel Numeric(string name,float value,Action<float> changed)
     {
