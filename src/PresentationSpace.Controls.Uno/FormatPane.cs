@@ -40,6 +40,8 @@ public sealed class FormatPane : SessionControl
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
             Hint(shape.Name+(s.Selection.Count>1?$" · {s.Selection.Count} objects selected":""));
+            Section("Accessibility");var alternative=new TextBox{Header="Alternative text",Text=shape.AlternativeText,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,FontSize=12};
+            alternative.LostFocus+=(_,_)=>{if(alternative.Text!=s.PrimaryShape?.AlternativeText)s.Apply("Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
             Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));
             Section("Size & position");
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));

@@ -12,7 +12,7 @@ public sealed record ImportResult(PresentationDocument Document,IReadOnlyList<st
 public sealed record ExportResult(byte[] Data,IReadOnlyList<string> Warnings);
 
 /// <summary>Interoperability for the documented PresentationML subset. Never executes macros, follows external links, or downloads assets.</summary>
-public static class PptxCodec
+public static partial class PptxCodec
 {
     private static readonly XNamespace P="http://schemas.openxmlformats.org/presentationml/2006/main",A="http://schemas.openxmlformats.org/drawingml/2006/main",R="http://schemas.openxmlformats.org/officeDocument/2006/relationships",Rel="http://schemas.openxmlformats.org/package/2006/relationships",CT="http://schemas.openxmlformats.org/package/2006/content-types",C="http://schemas.openxmlformats.org/drawingml/2006/chart";
     private const string RelationshipBase="http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
@@ -37,21 +37,15 @@ public static class PptxCodec
     {
         var b=shape.Bounds;return new(A+"xfrm",V("rot",(int)Math.Round(shape.Rotation*60000)),new XElement(A+"off",V("x",E(b.X)),V("y",E(b.Y))),new XElement(A+"ext",V("cx",E(b.Width)),V("cy",E(b.Height))));
     }
-    private static XElement TextBody(string text,TextStyle style)
-    {
-        string align=style.Alignment switch{ParagraphAlignment.Center=>"ctr",ParagraphAlignment.Right=>"r",_=>"l"};string anchor=style.VerticalAlignment switch{VerticalAlignment.Middle=>"ctr",VerticalAlignment.Bottom=>"b",_=>"t"};
-        return new(P+"txBody",new XElement(A+"bodyPr",V("wrap","square"),V("lIns",E(3)),V("rIns",E(3)),V("tIns",E(3)),V("bIns",E(3)),V("anchor",anchor)),new XElement(A+"lstStyle"),text.Replace("\r","").Split('\n').Select(line=>new XElement(A+"p",
-            new XElement(A+"pPr",V("algn",align),new XElement(A+"lnSpc",new XElement(A+"spcPct",V("val",(int)(style.LineSpacing*100000)))),style.Bullets?new XElement(A+"buChar",V("char","•")):new XElement(A+"buNone")),
-            new XElement(A+"r",new XElement(A+"rPr",V("lang","en-US"),V("sz",Math.Clamp((int)Math.Round(style.FontSize*75),100,400000)),V("b",style.Bold?1:0),V("i",style.Italic?1:0),V("u",style.Underline?"sng":"none"),Fill(style.Color),new XElement(A+"latin",V("typeface",style.FontFamily))),new XElement(A+"t",line)),new XElement(A+"endParaRPr",V("lang","en-US")))));
-    }
+    private static XElement TextBody(string text,TextStyle style) => RichTextBody(new SlideShape { Text = text, TextStyle = style });
     private static XElement Shape(SlideShape s,int id,string? imageRelationship=null)
     {
-        var nonvisual=new XElement(P+"cNvPr",V("id",id),V("name",s.Name),V("hidden",s.Hidden?1:0));
+        var nonvisual=new XElement(P+"cNvPr",V("id",id),V("name",s.Name),V("descr",s.AlternativeText),V("hidden",s.Hidden?1:0));
         if(s.Kind==ShapeKind.Image&&imageRelationship is not null)
             return new(P+"pic",new XElement(P+"nvPicPr",nonvisual,new XElement(P+"cNvPicPr",new XElement(A+"picLocks",V("noChangeAspect",1))),new XElement(P+"nvPr")),new XElement(P+"blipFill",new XElement(A+"blip",new XAttribute(R+"embed",imageRelationship)),new XElement(A+"stretch",new XElement(A+"fillRect"))),new XElement(P+"spPr",Transform(s),new XElement(A+"prstGeom",V("prst","rect"),new XElement(A+"avLst"))));
         string geometry=s.Kind switch{ShapeKind.Ellipse=>"ellipse",ShapeKind.RoundRectangle=>"roundRect",ShapeKind.Triangle=>"triangle",ShapeKind.Diamond=>"diamond",ShapeKind.Line or ShapeKind.Arrow=>"line",_=>"rect"};
         var outline=new XElement(A+"ln",V("w",E(s.StrokeWidth)),Fill(s.Stroke,s.Opacity));if(s.Kind==ShapeKind.Arrow)outline.Add(new XElement(A+"tailEnd",V("type","triangle")));
-        return new(P+"sp",new XElement(P+"nvSpPr",nonvisual,new XElement(P+"cNvSpPr",V("txBox",s.Kind==ShapeKind.Text?1:0)),new XElement(P+"nvPr")),new XElement(P+"spPr",Transform(s),new XElement(A+"prstGeom",V("prst",geometry),new XElement(A+"avLst")),Fill(s.Fill,s.Opacity),outline),TextBody(s.Text,s.TextStyle));
+        return new(P+"sp",new XElement(P+"nvSpPr",nonvisual,new XElement(P+"cNvSpPr",V("txBox",s.Kind==ShapeKind.Text?1:0)),new XElement(P+"nvPr",s.Placeholder == PlaceholderKind.None ? null : Placeholder(s))),new XElement(P+"spPr",Transform(s),new XElement(A+"prstGeom",V("prst",geometry),new XElement(A+"avLst")),Fill(s.Fill,s.Opacity),outline),RichTextBody(s));
     }
     public static ExportResult Export(PresentationDocument document)
     {
@@ -68,14 +62,16 @@ public static class PptxCodec
             for(int index=0;index<document.Slides.Length;index++)
             {
                 var slide=document.Slides[index];int number=index+1;string rid="rId"+(number+3);slideIds.Add(new XElement(P+"sldId",V("id",256+index),new XAttribute(R+"id",rid)));presentationRels.Add(Relation(rid,"slide",$"slides/slide{number}.xml"));
-                var rels=new List<XElement>{Relation("rId1","slideLayout","../slideLayouts/slideLayout1.xml"),Relation("rId2","notesSlide",$"../notesSlides/notesSlide{number}.xml")};
+                var rels=new List<XElement>{Relation("rId1","slideLayout",$"../slideLayouts/slideLayout{Math.Max(0,SlideLayoutEngine.Layouts.IndexOf(slide.LayoutName??"Blank"))+1}.xml"),Relation("rId2","notesSlide",$"../notesSlides/notesSlide{number}.xml")};
                 var shapes=new List<XElement>();int objectId=2;
                 foreach(var original in slide.Shapes)
                 {
                     if(original.Animation!=AnimationKind.None)warnings.Add("Object animations are retained in native files but are not exported to PPTX.");
                     if(original.Locked||original.GroupId is not null)warnings.Add("Grouping and editor locks are flattened on PPTX export.");
-                    foreach(var shape in Expand(original,warnings))
+                    foreach(var shape in new[]{original})
                     {
+                        if(shape.Kind==ShapeKind.Table){shapes.Add(NativeTable(shape,objectId++));continue;}
+                        if(shape.Kind==ShapeKind.Chart){shapes.Add(NativeChart(zip,types,shape,objectId++,number,rels));continue;}
                         string? imageRid=null;
                         if(shape.Kind==ShapeKind.Image&&shape.AssetId is {} assetId&&document.Assets.TryGetValue(assetId,out var asset))
                         {
@@ -95,31 +91,20 @@ public static class PptxCodec
             }
             Xml("ppt/presentation.xml",Root(P+"presentation",new XElement(P+"sldMasterIdLst",new XElement(P+"sldMasterId",V("id",2147483648L),new XAttribute(R+"id","rId1"))),new XElement(P+"notesMasterIdLst",new XElement(P+"notesMasterId",new XAttribute(R+"id","rId2"))),slideIds,new XElement(P+"sldSz",V("cx",E(document.Width)),V("cy",E(document.Height))),new XElement(P+"notesSz",V("cx",6858000),V("cy",9144000))),PresentationContent+"presentation.main+xml");
             Xml("ppt/_rels/presentation.xml.rels",Relations(presentationRels));Xml("ppt/presProps.xml",Root(P+"presentationPr"),PresentationContent+"presProps+xml");
-            Xml("ppt/slideMasters/slideMaster1.xml",Root(P+"sldMaster",new XElement(P+"cSld",V("name","PresentationSpace"),GroupTree()),ColorMap(),new XElement(P+"sldLayoutIdLst",new XElement(P+"sldLayoutId",V("id",2147483649L),new XAttribute(R+"id","rId1"))),new XElement(P+"txStyles",new XElement(P+"titleStyle"),new XElement(P+"bodyStyle"),new XElement(P+"otherStyle"))),PresentationContent+"slideMaster+xml");
-            Xml("ppt/slideMasters/_rels/slideMaster1.xml.rels",Relations([Relation("rId1","slideLayout","../slideLayouts/slideLayout1.xml"),Relation("rId2","theme","../theme/theme1.xml")]));
-            Xml("ppt/slideLayouts/slideLayout1.xml",Root(P+"sldLayout",V("type","blank"),V("preserve",1),new XElement(P+"cSld",V("name","Blank"),GroupTree()),ColorMapOverride()),PresentationContent+"slideLayout+xml");
-            Xml("ppt/slideLayouts/_rels/slideLayout1.xml.rels",Relations([Relation("rId1","slideMaster","../slideMasters/slideMaster1.xml")]));
+            Xml("ppt/slideMasters/slideMaster1.xml",Root(P+"sldMaster",new XElement(P+"cSld",V("name","PresentationSpace"),GroupTree()),ColorMap(),new XElement(P+"sldLayoutIdLst",SlideLayoutEngine.Layouts.Select((_,i)=>new XElement(P+"sldLayoutId",V("id",2147483649L+i),new XAttribute(R+"id","rId"+(i+1))))),new XElement(P+"txStyles",new XElement(P+"titleStyle"),new XElement(P+"bodyStyle"),new XElement(P+"otherStyle"))),PresentationContent+"slideMaster+xml");
+            Xml("ppt/slideMasters/_rels/slideMaster1.xml.rels",Relations(SlideLayoutEngine.Layouts.Select((_,i)=>Relation("rId"+(i+1),"slideLayout",$"../slideLayouts/slideLayout{i+1}.xml")).Append(Relation("rIdTheme","theme","../theme/theme1.xml"))));
+            for(int i=0;i<SlideLayoutEngine.Layouts.Length;i++)
+            {
+                var name=SlideLayoutEngine.Layouts[i];var template=SlideFactory.Create(name,document.Width,document.Height);
+                string type=name switch{"Title slide"=>"title","Title and content"=>"obj","Two content"=>"twoObj","Title only"=>"titleOnly",_=>"blank"};
+                Xml($"ppt/slideLayouts/slideLayout{i+1}.xml",Root(P+"sldLayout",V("type",type),V("preserve",1),new XElement(P+"cSld",V("name",name),GroupTree(template.Shapes.Select((shape,j)=>(object)Shape(shape,j+2)).ToArray())),ColorMapOverride()),PresentationContent+"slideLayout+xml");
+                Xml($"ppt/slideLayouts/_rels/slideLayout{i+1}.xml.rels",Relations([Relation("rId1","slideMaster","../slideMasters/slideMaster1.xml")]));
+            }
             Xml("ppt/notesMasters/notesMaster1.xml",Root(P+"notesMaster",new XElement(P+"cSld",GroupTree()),ColorMap(),new XElement(P+"notesStyle")),PresentationContent+"notesMaster+xml");
             Xml("ppt/notesMasters/_rels/notesMaster1.xml.rels",Relations([Relation("rId1","theme","../theme/theme1.xml")]));
             Xml("ppt/theme/theme1.xml",Theme(),"application/vnd.openxmlformats-officedocument.theme+xml");Xml("[Content_Types].xml",types);
         }
         return new(output.ToArray(),warnings.ToArray());
-    }
-    private static IEnumerable<SlideShape> Expand(SlideShape s,HashSet<string> warnings)
-    {
-        if(s.Kind==ShapeKind.Table)
-        {
-            warnings.Add("Tables are exported as editable cell shapes rather than native PowerPoint tables.");int columns=s.TableColumns,rows=Math.Max(1,(s.Cells.Length+columns-1)/columns);float w=s.Bounds.Width/columns,h=s.Bounds.Height/rows;
-            for(int row=0;row<rows;row++)for(int col=0;col<columns;col++){int i=row*columns+col;yield return s with{Id=Guid.NewGuid(),Kind=ShapeKind.Rectangle,Name=s.Name+$" cell {row+1},{col+1}",Bounds=new(s.Bounds.X+col*w,s.Bounds.Y+row*h,w,h),Rotation=0,Text=i<s.Cells.Length?s.Cells[i]:"",Fill=row==0?s.Fill:row%2==0?"#F1F4F8":"#FFFFFF",Stroke="#D8DEE8",StrokeWidth=1,TextStyle=s.TextStyle with{FontSize=Math.Min(s.TextStyle.FontSize,Math.Max(9,h*.35f)),Color=row==0?"#FFFFFF":s.TextStyle.Color,Bold=row==0,VerticalAlignment=VerticalAlignment.Middle}};}
-            yield break;
-        }
-        if(s.Kind==ShapeKind.Chart)
-        {
-            warnings.Add("Charts are exported as editable bars and labels, not native charts or embedded workbooks.");var values=s.Values.IsEmpty?ImmutableArray.Create(42f,68,54,89):s.Values;float max=Math.Max(1,values.Max()),min=Math.Min(0,values.Min()),range=Math.Max(1,max-min);float width=s.Bounds.Width/values.Length,areaHeight=s.Bounds.Height-50,zero=s.Bounds.Y+areaHeight*max/range;
-            for(int i=0;i<values.Length;i++){float y=s.Bounds.Y+areaHeight*(max-values[i])/range;yield return s with{Id=Guid.NewGuid(),Kind=ShapeKind.Rectangle,Name=s.Name+" bar "+(i+1),Bounds=new(s.Bounds.X+i*width+width*.2f,Math.Min(y,zero),width*.6f,Math.Max(1,Math.Abs(zero-y))),Rotation=0,Text=""};yield return SlideFactory.Text(i<s.Labels.Length?s.Labels[i]:(i+1).ToString(),s.Bounds.X+i*width,s.Bounds.Bottom-40,width,35,16) with{TextStyle=new(){FontSize=16,Alignment=ParagraphAlignment.Center}};yield return SlideFactory.Text(values[i].ToString("0.#",CultureInfo.InvariantCulture),s.Bounds.X+i*width,y-25,width,25,16) with{TextStyle=new(){FontSize=16,Alignment=ParagraphAlignment.Center,Bold=true}};}
-            yield break;
-        }
-        yield return s;
     }
     private static XElement Theme()
     {
@@ -166,7 +151,23 @@ public static class PptxCodec
         foreach(var id in presentation.Element(P+"sldIdLst")?.Elements(P+"sldId")??[])
         {
             if(slides.Count>=2000)throw new InvalidDataException("Too many slides.");string rid=(string?)id.Attribute(R+"id")??"";if(!presentationRels.TryGetValue(rid,out var relation))throw new InvalidDataException("Missing slide relationship.");var root=Read(relation.Path);var rels=Rels(relation.Path);var tree=root.Element(P+"cSld")?.Element(P+"spTree");var shapes=ImmutableArray.CreateBuilder<SlideShape>();
-            XElement? layout=null;var layoutRel=rels.Values.FirstOrDefault(r=>r.Type.EndsWith("/slideLayout"));if(layoutRel.Path is not null)layout=Read(layoutRel.Path);
+            XElement? layout=null,master=null;var layoutRel=rels.Values.FirstOrDefault(r=>r.Type.EndsWith("/slideLayout"));
+            if(layoutRel.Path is not null)
+            {
+                layout=Read(layoutRel.Path);var masterRel=Rels(layoutRel.Path).Values.FirstOrDefault(r=>r.Type.EndsWith("/slideMaster"));
+                if(masterRel.Path is not null)master=Read(masterRel.Path);
+            }
+            XElement? MatchPlaceholder(XElement? container,XElement? ph,bool matchTypeOnly=false)
+            {
+                if(container is null||ph is null)return null;
+                string type=(string?)ph.Attribute("type")??"obj",index=(string?)ph.Attribute("idx")??"0";
+                return container.Element(P+"cSld")?.Element(P+"spTree")?.Elements(P+"sp").FirstOrDefault(candidate=>
+                {
+                    var p=candidate.Descendants(P+"ph").FirstOrDefault();if(p is null)return false;
+                    string candidateType=(string?)p.Attribute("type")??"obj";
+                    return matchTypeOnly ? ReadPlaceholder(p)==ReadPlaceholder(ph) : ((string?)p.Attribute("idx")??"0")==index;
+                });
+            }
             string ReadColor(XElement? container,string fallback)
             {
                 if(container is null)return fallback;if(container.Element(A+"noFill")is not null)return "#00000000";
@@ -184,17 +185,16 @@ public static class PptxCodec
                 }
                 if(node.Name!=P+"sp"&&node.Name!=P+"pic"&&node.Name!=P+"cxnSp"&&node.Name!=P+"graphicFrame")return;
                 var properties=node.Element(P+"spPr");var xfrm=properties?.Element(A+"xfrm")??node.Element(P+"xfrm");
-                if(xfrm is null)
-                {
-                    var ph=node.Descendants(P+"ph").FirstOrDefault();if(ph is not null&&layout is not null){var match=layout.Descendants(P+"sp").FirstOrDefault(s=>{var p=s.Descendants(P+"ph").FirstOrDefault();return p is not null&&(string?)p.Attribute("idx")== (string?)ph.Attribute("idx")&&(string?)p.Attribute("type")== (string?)ph.Attribute("type");});xfrm=match?.Element(P+"spPr")?.Element(A+"xfrm");}
-                }
+                var ph=node.Descendants(P+"ph").FirstOrDefault();var layoutShape=MatchPlaceholder(layout,ph);var masterShape=MatchPlaceholder(master,layoutShape?.Descendants(P+"ph").FirstOrDefault()??ph,true);
+                xfrm??=layoutShape?.Element(P+"spPr")?.Element(A+"xfrm")??masterShape?.Element(P+"spPr")?.Element(A+"xfrm");
                 var off=xfrm?.Elements().FirstOrDefault(e=>e.Name.LocalName=="off");var ext=xfrm?.Elements().FirstOrDefault(e=>e.Name.LocalName=="ext");var bounds=new RectF(tx+Number(off,"x",762000)/Emu*sx,ty+Number(off,"y",762000)/Emu*sy,Math.Max(1,Number(ext,"cx",9144000)/Emu*sx),Math.Max(1,Number(ext,"cy",857250)/Emu*sy));
                 var nv=node.Descendants(P+"cNvPr").FirstOrDefault();string name=(string?)nv?.Attribute("name")??"Imported object";bool hidden=(string?)nv?.Attribute("hidden") is "1" or "true";var preset=(string?)properties?.Element(A+"prstGeom")?.Attribute("prst")??"rect";
                 var kind=preset switch{"ellipse"=>ShapeKind.Ellipse,"roundRect"=>ShapeKind.RoundRectangle,"triangle"=>ShapeKind.Triangle,"diamond"=>ShapeKind.Diamond,"line"=>ShapeKind.Line,_=>ShapeKind.Rectangle};if(node.Name==P+"cxnSp")kind=ShapeKind.Line;if(properties?.Element(A+"ln")?.Element(A+"tailEnd")is not null)kind=ShapeKind.Arrow;
                 if((string?)node.Element(P+"nvSpPr")?.Element(P+"cNvSpPr")?.Attribute("txBox")is "1" or "true")kind=ShapeKind.Text;
-                var body=node.Element(P+"txBody");var run=body?.Descendants(A+"rPr").FirstOrDefault();var paragraph=body?.Element(A+"p")?.Element(A+"pPr");string text=body is null?"":string.Join('\n',body.Elements(A+"p").Select(p=>string.Concat(p.Descendants().Where(e=>e.Name==A+"t"||e.Name==A+"br").Select(e=>e.Name==A+"br"?"\n":e.Value))));
+                var body=node.Element(P+"txBody");var paragraph=body?.Element(A+"p")?.Element(A+"pPr");var run=paragraph?.Element(A+"defRPr")??body?.Element(A+"lstStyle")?.Element(A+"lvl1pPr")?.Element(A+"defRPr")??layoutShape?.Descendants(A+"defRPr").FirstOrDefault()??masterShape?.Descendants(A+"defRPr").FirstOrDefault();string text=body is null?"":string.Join('\n',body.Elements(A+"p").Select(p=>string.Concat(p.Descendants().Where(e=>e.Name==A+"t"||e.Name==A+"br").Select(e=>e.Name==A+"br"?"\n":e.Value))));
                 var style=new TextStyle{FontSize=Math.Clamp(Number(run,"sz",2100)/75,1,512),FontFamily=(string?)run?.Element(A+"latin")?.Attribute("typeface")??"Arial",Bold=(string?)run?.Attribute("b")is "1" or "true",Italic=(string?)run?.Attribute("i")is "1" or "true",Underline=(string?)run?.Attribute("u")=="sng",Color=ReadColor(run,"#243247"),Alignment=(string?)paragraph?.Attribute("algn")switch{"ctr"=>ParagraphAlignment.Center,"r"=>ParagraphAlignment.Right,_=>ParagraphAlignment.Left},Bullets=paragraph?.Element(A+"buChar")is not null,VerticalAlignment=(string?)body?.Element(A+"bodyPr")?.Attribute("anchor")switch{"ctr"=>VerticalAlignment.Middle,"b"=>VerticalAlignment.Bottom,_=>VerticalAlignment.Top}};
-                var shape=new SlideShape{Kind=kind,Name=name,Bounds=bounds,Hidden=hidden,Rotation=Number(xfrm,"rot")/60000,Text=text,TextStyle=style,Fill=ReadColor(properties,kind==ShapeKind.Text?"#00000000":"#D35230"),Stroke=ReadColor(properties?.Element(A+"ln"),"#00000000"),StrokeWidth=Number(properties?.Element(A+"ln"),"w",14288)/Emu};
+                var shape=new SlideShape{Kind=kind,Name=name,AlternativeText=(string?)nv?.Attribute("descr")??"",Placeholder=ReadPlaceholder(ph),PlaceholderIndex=Math.Max(0,(int)Number(ph,"idx")),Bounds=bounds,Hidden=hidden,Rotation=Number(xfrm,"rot")/60000,Text=text,TextStyle=style,Fill=ReadColor(properties,kind==ShapeKind.Text?"#00000000":"#D35230"),Stroke=ReadColor(properties?.Element(A+"ln"),"#00000000"),StrokeWidth=Number(properties?.Element(A+"ln"),"w",14288)/Emu};
+                shape=ReadRichText(shape,body,ReadColor);
                 if(node.Name==P+"pic")
                 {
                     string imageId=(string?)node.Descendants(A+"blip").FirstOrDefault()?.Attribute(R+"embed")??"";if(!rels.TryGetValue(imageId,out var imageRel)){warnings.Add("A linked or unsupported picture was omitted.");return;}
@@ -204,14 +204,22 @@ public static class PptxCodec
                 if(node.Name==P+"graphicFrame")
                 {
                     var table=node.Descendants(A+"tbl").FirstOrDefault();if(table is not null){shape=shape with{Kind=ShapeKind.Table,TableColumns=Math.Max(1,table.Element(A+"tblGrid")?.Elements().Count()??1),Cells=table.Elements(A+"tr").SelectMany(row=>row.Elements(A+"tc").Select(cell=>string.Join('\n',cell.Descendants(A+"p").Select(p=>string.Concat(p.Descendants(A+"t").Select(t=>t.Value)))))).ToImmutableArray(),TextStyle=style with{FontSize=20}};warnings.Add("Table cell formatting, spans and complex borders are simplified.");}
-                    else {warnings.Add("Native charts, SmartArt, media and unsupported graphic frames are omitted on import.");return;}
+                    else
+                    {
+                        var chart=node.Descendants(C+"chart").FirstOrDefault();string chartId=(string?)chart?.Attribute(R+"id")??"";
+                        if(chart is not null&&rels.TryGetValue(chartId,out var chartRel))
+                        {
+                            var imported=ReadNativeChart(shape,Read(chartRel.Path),warnings,ReadColor);if(imported is null)return;shape=imported;
+                        }
+                        else {warnings.Add("SmartArt, media and unsupported graphic frames are omitted on import.");return;}
+                    }
                 }
                 if(properties?.Element(A+"custGeom")is not null||!new[]{"rect","ellipse","roundRect","triangle","diamond","line"}.Contains(preset))warnings.Add("Unsupported preset and custom geometries are approximated as rectangles.");
-                if(body?.Descendants(A+"rPr").Select(r=>r.ToString()).Distinct().Count()>1)warnings.Add("Mixed rich-text runs are simplified to one style per text box.");shapes.Add(shape);
+                shapes.Add(shape);
             }
             if(tree is not null)foreach(var node in tree.Elements())Parse(node);
             string notes="";var notesRel=rels.Values.FirstOrDefault(x=>x.Type.EndsWith("/notesSlide"));if(notesRel.Path is not null){var notesRoot=Read(notesRel.Path);notes=string.Join('\n',notesRoot.Descendants(P+"sp").Where(s=>(string?)s.Descendants(P+"ph").FirstOrDefault()?.Attribute("type")=="body").SelectMany(s=>s.Descendants(A+"p")).Select(p=>string.Concat(p.Descendants(A+"t").Select(t=>t.Value))));}
-            var transition=root.Element(P+"transition")?.Elements().FirstOrDefault();var slide=new Slide{Name=(string?)root.Element(P+"cSld")?.Attribute("name")??shapes.FirstOrDefault(s=>!string.IsNullOrWhiteSpace(s.Text))?.Text.Split('\n')[0]??$"Slide {slides.Count+1}",Background=ReadColor(root.Element(P+"cSld")?.Element(P+"bg")?.Element(P+"bgPr"),"#FFFFFF"),Shapes=shapes.ToImmutable(),Notes=notes,Hidden=(string?)root.Attribute("show")=="0",Transition=transition?.Name.LocalName switch{"fade"=>TransitionKind.Fade,"push"=>TransitionKind.Push,"wipe"=>TransitionKind.Wipe,_=>TransitionKind.None}};slides.Add(slide);
+            var transition=root.Element(P+"transition")?.Elements().FirstOrDefault();var slide=new Slide{LayoutName=(string?)layout?.Element(P+"cSld")?.Attribute("name"),Name=(string?)root.Element(P+"cSld")?.Attribute("name")??shapes.FirstOrDefault(s=>!string.IsNullOrWhiteSpace(s.Text))?.Text.Split('\n')[0]??$"Slide {slides.Count+1}",Background=ReadColor(root.Element(P+"cSld")?.Element(P+"bg")?.Element(P+"bgPr"),ReadColor(layout?.Element(P+"cSld")?.Element(P+"bg")?.Element(P+"bgPr"),ReadColor(master?.Element(P+"cSld")?.Element(P+"bg")?.Element(P+"bgPr"),"#FFFFFF"))),Shapes=shapes.ToImmutable(),Notes=notes,Hidden=(string?)root.Attribute("show")=="0",Transition=transition?.Name.LocalName switch{"fade"=>TransitionKind.Fade,"push"=>TransitionKind.Push,"wipe"=>TransitionKind.Wipe,_=>TransitionKind.None}};slides.Add(slide);
             if(root.Element(P+"timing")is not null)warnings.Add("PowerPoint animation timelines are not imported.");
         }
         if(slides.Count==0)throw new InvalidDataException("No presentation slides were found.");

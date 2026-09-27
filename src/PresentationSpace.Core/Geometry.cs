@@ -1,6 +1,6 @@
 namespace PresentationSpace.Core;
 
-public static class Geometry
+public static partial class Geometry
 {
     public static PointF Rotate(PointF p, PointF center, float degrees)
     {
@@ -24,6 +24,11 @@ public static class Geometry
             return x * x + y * y <= 1;
         }
         if (shape.Kind == ShapeKind.Diamond) return Math.Abs((p.X - b.Center.X) / (b.Width / 2)) + Math.Abs((p.Y - b.Center.Y) / (b.Height / 2)) <= 1;
+        if (shape.Kind == ShapeKind.Triangle)
+        {
+            float fraction = (p.Y - b.Y) / b.Height;
+            return Math.Abs(p.X - b.Center.X) <= b.Width * fraction / 2;
+        }
         return true;
     }
     public static RectF Union(IEnumerable<SlideShape> shapes)
@@ -36,15 +41,21 @@ public static class Geometry
     public static float Snap(float value, float grid) => grid <= 0 ? value : MathF.Round(value / grid) * grid;
     public static RectF Resize(RectF original, int handle, PointF delta, bool keepAspect)
     {
-        float x = original.X, y = original.Y, w = original.Width, h = original.Height;
-        if (handle is 0 or 6 or 7) { x += delta.X; w -= delta.X; }
-        if (handle is 2 or 3 or 4) w += delta.X;
-        if (handle is 0 or 1 or 2) { y += delta.Y; h -= delta.Y; }
-        if (handle is 4 or 5 or 6) h += delta.Y;
-        w = Math.Max(8, w); h = Math.Max(8, h);
-        if (keepAspect) { h = w * original.Height / original.Width; if (handle is 0 or 1 or 2) y = original.Bottom - h; }
-        if (handle is 0 or 6 or 7) x = original.Right - w;
-        if (handle is 0 or 1 or 2) y = original.Bottom - h;
+        if (handle is < 0 or > 7) throw new ArgumentOutOfRangeException(nameof(handle));
+        bool left = handle is 0 or 6 or 7, right = handle is 2 or 3 or 4;
+        bool top = handle is 0 or 1 or 2, bottom = handle is 4 or 5 or 6;
+        float w = original.Width + (left ? -delta.X : right ? delta.X : 0);
+        float h = original.Height + (top ? -delta.Y : bottom ? delta.Y : 0);
+        if (keepAspect)
+        {
+            float sx = w / original.Width, sy = h / original.Height;
+            float scale = !(left || right) ? sy : !(top || bottom) ? sx : Math.Abs(sx - 1) >= Math.Abs(sy - 1) ? sx : sy;
+            scale = Math.Max(scale, Math.Max(8 / original.Width, 8 / original.Height));
+            w = original.Width * scale; h = original.Height * scale;
+        }
+        else { w = Math.Max(8, w); h = Math.Max(8, h); }
+        float x = left ? original.Right - w : right ? original.X : original.Center.X - w / 2;
+        float y = top ? original.Bottom - h : bottom ? original.Y : original.Center.Y - h / 2;
         return new(x, y, w, h);
     }
     public static PointF[] Handles(RectF b) => [new(b.X,b.Y),new(b.Center.X,b.Y),new(b.Right,b.Y),new(b.Right,b.Center.Y),new(b.Right,b.Bottom),new(b.Center.X,b.Bottom),new(b.X,b.Bottom),new(b.X,b.Center.Y)];

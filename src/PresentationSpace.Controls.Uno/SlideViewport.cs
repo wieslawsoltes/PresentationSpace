@@ -13,7 +13,7 @@ using CPoint = PresentationSpace.Core.PointF;
 
 namespace PresentationSpace.Controls.Uno;
 
-public sealed class SlideViewport : UserControl
+public sealed partial class SlideViewport : UserControl
 {
     private readonly SKXamlCanvas _surface = new();
     private readonly Canvas _overlay = new();
@@ -66,7 +66,13 @@ public sealed class SlideViewport : UserControl
     private void Attach() { if (!_subscribed && _session is not null) { _session.Changed += OnChanged; _subscribed = true; } }
     private void Detach() { if (_subscribed && _session is not null) _session.Changed -= OnChanged; _subscribed = false; }
     public void Refresh() => _surface.Invalidate();
-    private void OnChanged(object? sender, EditorChangedEventArgs e) => Refresh();
+    private void OnChanged(object? sender, EditorChangedEventArgs e)
+    {
+        if (_textSelection is { } selection && (Session?.CurrentSlide.Id != selection.SlideId || Session?.PrimaryShape?.Id != selection.ShapeId)) _textSelection = null;
+        var shape = Session?.PrimaryShape;
+        AutomationProperties.SetName(this, shape is null ? "Slide editing canvas" : $"Selected {shape.Kind}: {shape.Name}. {shape.AlternativeText}");
+        Refresh();
+    }
     public void SetZoom(float zoom)
     {
         CommitText();
@@ -145,6 +151,7 @@ public sealed class SlideViewport : UserControl
     private static bool Key(VirtualKey key) => (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key) & CoreVirtualKeyStates.Down) != 0;
     private void Pressed(object sender, PointerRoutedEventArgs e)
     {
+        _textSelection = null;
         if (Session is not { } session) return;
         var pointer = e.GetCurrentPoint(_surface);
         if (pointer.Properties.IsMiddleButtonPressed || (pointer.Properties.IsLeftButtonPressed && Key(VirtualKey.Space)))
@@ -212,7 +219,7 @@ public sealed class SlideViewport : UserControl
             {
                 var start = Geometry.Rotate(_down, shape.Bounds.Center, -shape.Rotation);
                 var end = Geometry.Rotate(position, shape.Bounds.Center, -shape.Rotation);
-                return shape with { Bounds = Geometry.Resize(shape.Bounds, _handle, new(end.X - start.X, end.Y - start.Y), shift) };
+                return shape with { Bounds = Geometry.ResizeRotated(shape.Bounds, shape.Rotation, _handle, new(end.X - start.X, end.Y - start.Y), shift) };
             });
         }
         else
@@ -273,6 +280,7 @@ public sealed class SlideViewport : UserControl
         Canvas.SetTop(_editor, _oy + bounds.Y * _scale);
         _overlay.Children.Add(_editor);
         _editor.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) { CancelText(); e.Handled = true; } };
+        _editor.SelectionChanged += (_, _) => CaptureTextSelection();
         _editor.LostFocus += (_, _) => CommitText();
         _editor.Focus(FocusState.Programmatic);
         _editor.SelectAll();
@@ -283,6 +291,7 @@ public sealed class SlideViewport : UserControl
         if (_editor is not { } editor || Session is not { } session) return;
         var id = _editingId;
         var slideId = _editingSlideId;
+        CaptureTextSelection();
         string text = editor.Text;
         _editor = null; _editingId = _editingSlideId = null;
         _overlay.Children.Remove(editor);
@@ -296,6 +305,7 @@ public sealed class SlideViewport : UserControl
     private void CancelText()
     {
         var editor = _editor;
+        _textSelection = null;
         _editor = null; _editingId = _editingSlideId = null;
         if (editor is not null) _overlay.Children.Remove(editor);
         Focus(FocusState.Programmatic);
