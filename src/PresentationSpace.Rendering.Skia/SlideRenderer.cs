@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using PresentationSpace.Core;
 using SkiaSharp;
 
@@ -13,32 +12,53 @@ public sealed class SlideRenderer : IDisposable
     private readonly Dictionary<string, SKTypeface> _faces = [];
     private long _clock, _imageBytes;
     public long ImageCacheBudget { get; set; } = 64 * 1024 * 1024;
+    public ITypefaceResolver? TypefaceResolver { get; set; }
+    /// <summary>Optional application-wide provider. Fonts remain owned by the provider.</summary>
+    public static ITypefaceResolver? DefaultTypefaceResolver { get; set; }
     public static SKColor Color(string? value, SKColor? fallback = null) => value is not null && SKColor.TryParse(value, out var c) ? c : fallback ?? SKColors.Transparent;
+
     public void Render(SKCanvas canvas, PresentationDocument document, Slide slide, float animationTime = float.PositiveInfinity)
     {
-        canvas.Save(); canvas.ClipRect(new(0,0,document.Width,document.Height)); canvas.Clear(Color(slide.Background,SKColors.White));
-        foreach (var shape in slide.Shapes)
+        canvas.Save();
+        try
         {
-            if (shape.Hidden) continue;
-            float progress = shape.Animation == AnimationKind.None ? 1 : Math.Clamp((animationTime - shape.AnimationOrder * .35f) / Math.Max(.01f,shape.AnimationDuration),0,1);
-            if (progress <= 0) continue;
-            canvas.Save();
-            var b = shape.Bounds;
-            canvas.RotateDegrees(shape.Rotation,b.Center.X,b.Center.Y);
-            if (shape.Animation == AnimationKind.FlyIn) canvas.Translate(0,80*(1-progress));
-            using var layer = new SKPaint { Color = SKColors.White.WithAlpha((byte)(255*shape.Opacity*(shape.Animation == AnimationKind.Fade ? progress : 1))) };
-            canvas.SaveLayer(layer);
-            DrawShape(canvas,document,shape);
-            canvas.Restore(); canvas.Restore();
+            canvas.ClipRect(new(0, 0, document.Width, document.Height));
+            canvas.Clear(Color(slide.Background, SKColors.White));
+            foreach (var shape in slide.Shapes)
+            {
+                if (shape.Hidden || shape.Opacity <= 0) continue;
+                float progress = shape.Animation == AnimationKind.None ? 1 : Math.Clamp((animationTime - shape.AnimationOrder * .35f) / Math.Max(.01f, shape.AnimationDuration), 0, 1);
+                if (progress <= 0) continue;
+                canvas.Save();
+                try
+                {
+                    var bounds = shape.Bounds;
+                    canvas.RotateDegrees(shape.Rotation, bounds.Center.X, bounds.Center.Y);
+                    if (shape.Animation == AnimationKind.FlyIn) canvas.Translate(0, 80 * (1 - progress));
+                    float opacity = shape.Opacity * (shape.Animation == AnimationKind.Fade ? progress : 1);
+                    if (opacity < .9999f)
+                    {
+                        using var layer = new SKPaint { Color = SKColors.White.WithAlpha((byte)(255 * opacity)) };
+                        canvas.SaveLayer(layer);
+                        try { DrawShape(canvas, document, shape); }
+                        finally { canvas.Restore(); }
+                    }
+                    else DrawShape(canvas, document, shape);
+                }
+                finally { canvas.Restore(); }
+            }
         }
-        canvas.Restore();
+        finally { canvas.Restore(); }
     }
-    private SKTypeface Face(TextStyle s)
+    private SKTypeface Face(TextStyle style)
     {
-        string key = $"{s.FontFamily}|{s.Bold}|{s.Italic}";
-        if (!_faces.TryGetValue(key,out var face))
+        var supplied = (TypefaceResolver ?? DefaultTypefaceResolver)?.Resolve(style);
+        if (supplied is not null) return supplied;
+        string key = $"{style.FontFamily}|{style.Bold}|{style.Italic}";
+        if (!_faces.TryGetValue(key, out var face))
         {
-            face = SKTypeface.FromFamilyName(s.FontFamily,new SKFontStyle(s.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,SKFontStyleWidth.Normal,s.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright));
+            if (_faces.Count >= 64) { var oldest = _faces.First(); oldest.Value.Dispose(); _faces.Remove(oldest.Key); }
+            face = SKTypeface.FromFamilyName(style.FontFamily, new SKFontStyle(style.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, style.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright));
             _faces[key] = face;
         }
         return face;
@@ -91,7 +111,7 @@ public sealed class SlideRenderer : IDisposable
         using var paint = new SKPaint { IsAntialias=true,Color=Color(style.Color,SKColors.Black) };
         float width = Math.Max(1,b.Width-padding*2), height = Math.Max(1,b.Height-padding*2);
         var lines = Wrap(text,font,width,style.Bullets).ToArray(); var metrics=font.Metrics;
-        float lineHeight=Math.Max(style.FontSize,metrics.Descent-metrics.Ascent)*style.LineSpacing;
+        float lineHeight=style.FontSize*style.LineSpacing;
         float used=lines.Length*lineHeight, top=style.VerticalAlignment switch { Core.VerticalAlignment.Middle => Math.Max(0,(height-used)/2), Core.VerticalAlignment.Bottom => Math.Max(0,height-used), _=>0 };
         c.Save(); c.ClipRect(new SKRect(b.X,b.Y,b.Right,b.Bottom)); float y=b.Y+padding+top-metrics.Ascent;
         foreach(var line in lines)
@@ -178,7 +198,7 @@ public sealed class SlideRenderer : IDisposable
         foreach(var shape in items)
         {
             var b=shape.Bounds;c.Save();c.RotateDegrees(shape.Rotation,b.Center.X,b.Center.Y);c.DrawRect(b.X,b.Y,b.Width,b.Height,line);
-            if(items.Length==1)
+            if(items.Length==1 && !shape.Locked)
             {
                 c.DrawLine(b.Center.X,b.Y,b.Center.X,b.Y-27*inv,line);c.DrawCircle(b.Center.X,b.Y-31*inv,4*inv,white);c.DrawCircle(b.Center.X,b.Y-31*inv,4*inv,line);
                 foreach(var p in Geometry.Handles(b)){c.DrawRect(p.X-3.5f*inv,p.Y-3.5f*inv,7*inv,7*inv,white);c.DrawRect(p.X-3.5f*inv,p.Y-3.5f*inv,7*inv,7*inv,line);}

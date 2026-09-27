@@ -12,21 +12,36 @@ concurrency:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
       - name: Install WebAssembly workload
         run: dotnet workload install wasm-tools --skip-manifest-update
       - name: Publish Uno WebAssembly application
         run: dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-browserwasm -c Release -p:PresentationTargetFrameworks=net10.0-browserwasm -p:WasmShellWebAppBasePath=/PresentationSpace/ -o artifacts/browser
-      - name: Prepare Pages distribution
-        run: python3 tools/prepare-pages.py artifacts/browser artifacts/site
+      - name: Prepare distributions
+        run: |
+          python3 tools/prepare-pages.py artifacts/browser artifacts/site
+          git archive --format=zip -o artifacts/PresentationSpace-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-distribution
+          path: artifacts/site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-distribution
+          path: artifacts/PresentationSpace-source.zip
       - name: Install Chromium smoke-test tools
         run: |
-          python3 -m pip install playwright==1.55.0
+          python3 -m pip install playwright==1.55.0 Pillow==11.3.0
           python3 -m playwright install --with-deps chromium
       - name: Browser interaction tests
         run: |
@@ -43,10 +58,15 @@ jobs:
           path: |
             artifacts/screenshots
             artifacts/server.log
+      - name: Pack all six reusable libraries
+        run: |
+          for project in Core Formats Rendering.Skia Ribbon.Uno Controls.Uno Editor.Uno; do
+            dotnet pack "src/PresentationSpace.$project/PresentationSpace.$project.csproj" -c Release -o artifacts/packages
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: browser-distribution
-          path: artifacts/site
+          name: nuget-packages
+          path: artifacts/packages/*.nupkg
       - uses: actions/upload-pages-artifact@v3
         with:
           path: artifacts/site

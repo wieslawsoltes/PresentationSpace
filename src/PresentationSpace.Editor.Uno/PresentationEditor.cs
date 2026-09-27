@@ -30,7 +30,7 @@ public sealed partial class PresentationEditor : UserControl
     private readonly List<(string Title,Action Execute)> _commands=[];
     private readonly DispatcherTimer _recoveryTimer=new(){Interval=TimeSpan.FromMilliseconds(900)};
     private PresentationDocument? _lastRecovery,_observed;
-    private bool _autoSave=true,_busy,_syncing,_sorterVisible;
+    private bool _autoSave=true,_busy,_syncing;
     private Grid? _backstage;
     private ComboBox? _fontFamily,_fontSize;
     private RibbonCommandButton? _bold,_italic,_underline;
@@ -38,6 +38,9 @@ public sealed partial class PresentationEditor : UserControl
     public PresentationEditor(EditorSession? session,IWorkspaceStorage? storage)
     {
         Session=session??new EditorSession(SlideFactory.Welcome());Storage=storage;FontFamily=new FontFamily("Segoe UI");Foreground=OfficePalette.Ink;
+        // Establish the initial baseline before any child can raise Loaded or selection events.
+        // An unchanged welcome document must never overwrite an existing recovery file.
+        _observed=Session.Document;
         Viewport.Session=Session;_filmstrip.Session=Session;_format.Session=Session;_notes.Session=Session;_sorter.Session=Session;_status.Session=Session;
         _root.Background=OfficePalette.Brush("F5F5F5");_root.RowDefinitions.Add(new(){Height=new GridLength(44)});_root.RowDefinitions.Add(new(){Height=GridLength.Auto});_root.RowDefinitions.Add(new(){Height=GridLength.Auto});_root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});_root.RowDefinitions.Add(new(){Height=new GridLength(29)});
         _root.Children.Add(BuildTitleBar());Grid.SetRow(Ribbon,1);_root.Children.Add(Ribbon);Grid.SetRow(_notice,2);_root.Children.Add(_notice);Grid.SetRow(_workspace,3);_root.Children.Add(_workspace);Grid.SetRow(_status,4);_root.Children.Add(_status);BuildWorkspace();BuildRibbon();BuildCommands();
@@ -55,7 +58,7 @@ public sealed partial class PresentationEditor : UserControl
         var bar=new Grid{Background=OfficePalette.Brush("F7EAE5"),Padding=new(12,0,12,0),ColumnSpacing=15,ColumnDefinitions={new(){Width=GridLength.Auto},new(){Width=new GridLength(1,GridUnitType.Star)},new(){Width=GridLength.Auto},new(){Width=GridLength.Auto}}};
         var left=new StackPanel{Orientation=Orientation.Horizontal,Spacing=10,VerticalAlignment=VAlign.Center};
         left.Children.Add(new Border{Background=OfficePalette.Accent,CornerRadius=new(4),Width=27,Height=27,Child=new TextBlock{Text="P",Foreground=OfficePalette.White,FontSize=19,FontWeight=Microsoft.UI.Text.FontWeights.Bold,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VAlign.Center}});
-        var auto=new ToggleSwitch{IsOn=true,OffContent="",OnContent="",MinWidth=0,Width=45,MinHeight=0,Height=26};ToolTipService.SetToolTip(auto,"AutoSave a local recovery copy. This is not cloud storage.");auto.Toggled+=(_,_)=>{_autoSave=auto.IsOn;if(_autoSave)_recoveryTimer.Start();};left.Children.Add(OfficePalette.Text("AutoSave",10));left.Children.Add(auto);
+        var auto=new ToggleSwitch{IsOn=true,OffContent="",OnContent="",MinWidth=0,Width=45,MinHeight=0,Height=26};ToolTipService.SetToolTip(auto,"AutoSave a local recovery copy. This is not cloud storage.");auto.Toggled+=(_,_)=>{_autoSave=auto.IsOn;if(_autoSave&&Session.IsDirty)_recoveryTimer.Start();};left.Children.Add(OfficePalette.Text("AutoSave",10));left.Children.Add(auto);
         left.Children.Add(Quick("Save","\uE74E",()=>Run(SaveNativeAsync)));left.Children.Add(Quick("Undo","\uE7A7",()=>Session.Undo()));left.Children.Add(Quick("Redo","\uE7A6",()=>Session.Redo()));bar.Children.Add(left);
         var titlePanel=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};_documentName.MaxWidth=330;_documentName.TextTrimming=TextTrimming.CharacterEllipsis;titlePanel.Children.Add(_documentName);titlePanel.Children.Add(OfficePalette.Text("⌄",11));_saveState.Foreground=OfficePalette.Muted;titlePanel.Children.Add(_saveState);
         var titleButton=new Button{Content=titlePanel,Background=OfficePalette.Brush("00FFFFFF"),BorderThickness=new(0),Padding=new(4),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VAlign.Center};titleButton.Click+=(_,_)=>Run(RenameAsync);Grid.SetColumn(titleButton,1);bar.Children.Add(titleButton);
@@ -83,8 +86,8 @@ public sealed partial class PresentationEditor : UserControl
     public void ShowInspector(InspectorMode mode){Viewport.CommitText();_format.Mode=mode;_formatColumn.Width=new GridLength(296);_format.Rebuild();}
     public void HideInspector()=>_formatColumn.Width=new GridLength(0);
     public void ToggleNotes(){_notes.Commit();_notesRow.Height=new GridLength(_notesRow.Height.Value>0?0:100);}
-    public void ShowNormal(){_sorterVisible=false;Viewport.Visibility=Visibility.Visible;_sorter.Visibility=Visibility.Collapsed;Viewport.Focus(FocusState.Programmatic);ViewChanged?.Invoke(this,EventArgs.Empty);}
-    public void ShowSorter(){FlushEdits();_sorterVisible=true;Viewport.Visibility=Visibility.Collapsed;_sorter.Visibility=Visibility.Visible;ViewChanged?.Invoke(this,EventArgs.Empty);}
+    public void ShowNormal(){Viewport.Visibility=Visibility.Visible;_sorter.Visibility=Visibility.Collapsed;Viewport.Focus(FocusState.Programmatic);ViewChanged?.Invoke(this,EventArgs.Empty);}
+    public void ShowSorter(){FlushEdits();Viewport.Visibility=Visibility.Collapsed;_sorter.Visibility=Visibility.Visible;ViewChanged?.Invoke(this,EventArgs.Empty);}
     public void StartShow(bool fromBeginning){FlushEdits();if(Session.Document.Slides.All(s=>s.Hidden)){Notice("Every slide is hidden. Unhide a slide before presenting.");return;}_player.Start(Session.Document,fromBeginning?0:Session.SlideIndex);ViewChanged?.Invoke(this,EventArgs.Empty);}
     public void FlushEdits(){Viewport.CommitText();_notes.Commit();Session.CommitGesture();}
     private void Insert(ShapeKind kind){FlushEdits();Session.Insert(kind);ShowNormal();if(kind==ShapeKind.Text)Viewport.EditText();if(kind is ShapeKind.Chart or ShapeKind.Table)ShowInspector(InspectorMode.Format);}
