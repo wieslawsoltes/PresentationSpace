@@ -6,16 +6,15 @@ permissions:
   contents: write
 jobs:
   apply:
-    if: startsWith(github.event.head_commit.message, 'build: apply fidelity implementation')
+    if: startsWith(github.event.head_commit.message, 'apply-fidelity')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
       - name: Apply exact-baseline implementation
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 8d9e11d0d83771abcbfae98f4622e6bccc1a1a4d
+          test "$(git hash-object src/PresentationSpace.Core/EditorSession.cs)" = 35094786318bee4cb63fce65f254f9503ee8d364
+          test "$(git hash-object src/PresentationSpace.Formats/PptxCodec.cs)" = dfde1d1b2209d56245ff8e8629ae8485094c6db4
           git apply --check --unidiff-zero .ci-fidelity/*.patch
           git apply --unidiff-zero .ci-fidelity/*.patch
           python3 .ci-fidelity/apply-formats.py
