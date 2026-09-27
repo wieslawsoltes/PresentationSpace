@@ -12,6 +12,8 @@ public sealed class FormatPane : SessionControl
 {
     private readonly StackPanel _body=new(){Spacing=13,Margin=new(16,14,16,24)};
     private readonly TextBlock _title=OfficePalette.Text("Format Shape",16,true);
+    private ChartDataEditor? _chartEditor;
+    public void FocusChartData() => _chartEditor?.FocusData();
     private bool _building;private Guid? _lastSelection;private SlideShape? _lastShape;private InspectorMode _mode;
     public InspectorMode Mode{get=>_mode;set{_mode=value;Rebuild();}}
     public event EventHandler? CloseRequested;
@@ -35,14 +37,26 @@ public sealed class FormatPane : SessionControl
         if(_building||Session is not {} s)return;_building=true;
         try
         {
-            _body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
+            _chartEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
             if(_mode==InspectorMode.Selection){BuildSelection(s);return;}if(_mode==InspectorMode.Comments){BuildComments(s);return;}
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
             Hint(shape.Name+(s.Selection.Count>1?$" · {s.Selection.Count} objects selected":""));
             Section("Accessibility");var alternative=new TextBox{Header="Alternative text",Text=shape.AlternativeText,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,FontSize=12};
             alternative.LostFocus+=(_,_)=>{if(alternative.Text!=s.PrimaryShape?.AlternativeText)s.Apply("Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
-            Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));
+            if(shape.Kind==ShapeKind.Chart)
+            {
+                Section("Chart design");
+                if(s.Selection.Count==1)
+                {
+                    _chartEditor=new ChartDataEditor();_chartEditor.SetValue(ChartModel.Get(shape));
+                    var id=shape.Id;
+                    _chartEditor.ValueChanged+=(_,chart)=>s.EditSlide("Edit chart",slide=>slide with{Shapes=slide.Shapes.Select(x=>x.Id==id&&!x.Locked?ChartModel.Apply(x,chart):x).ToImmutableArray()});
+                    _body.Children.Add(_chartEditor);
+                }
+                else Hint("Select one chart to edit its data and design.");
+            }
+            else {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));}
             Section("Size & position");
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));
             NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,8,16384)}}));
@@ -53,12 +67,6 @@ public sealed class FormatPane : SessionControl
                 Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.LostFocus+=(_,_)=>{if(text.Text!=s.PrimaryShape?.Text)s.Apply("Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
                 Number("Font size",shape.TextStyle.FontSize,v=>s.Apply("Font size",x=>x with{TextStyle=x.TextStyle with{FontSize=Math.Clamp(v,1,512)}}));Palette(color=>s.Apply("Text color",x=>x with{TextStyle=x.TextStyle with{Color=color}}));
                 Choice("Vertical alignment",Enum.GetNames<Core.VerticalAlignment>(),shape.TextStyle.VerticalAlignment.ToString(),value=>s.Apply("Text vertical alignment",x=>x with{TextStyle=x.TextStyle with{VerticalAlignment=Enum.Parse<Core.VerticalAlignment>(value)}}));
-            }
-            if(shape.Kind==ShapeKind.Chart)
-            {
-                Section("Chart data");Hint("One label,value pair per line. Use a dot for decimals.");
-                var data=new TextBox{Text=string.Join('\n',shape.Values.Select((v,i)=>(i<shape.Labels.Length?shape.Labels[i]:$"{i+1}")+","+v.ToString(CultureInfo.InvariantCulture))),AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=110,FontSize=12};_body.Children.Add(data);
-                ActionButton("Apply chart data",()=>{var rows=data.Text.Split('\n',StringSplitOptions.RemoveEmptyEntries).Take(100).Select(line=>line.Split(',')).ToArray();if(rows.Any(r=>r.Length<2||!float.TryParse(r[^1],NumberStyles.Float,CultureInfo.InvariantCulture,out var f)||!float.IsFinite(f))){Hint("Use valid label,value rows.");return;}s.Apply("Edit chart data",x=>x with{Labels=rows.Select(r=>string.Join(',',r[..^1])).ToImmutableArray(),Values=rows.Select(r=>float.Parse(r[^1],CultureInfo.InvariantCulture)).ToImmutableArray()});});
             }
             if(shape.Kind==ShapeKind.Table)
             {
