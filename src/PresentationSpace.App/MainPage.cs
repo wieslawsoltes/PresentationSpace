@@ -30,6 +30,8 @@ public sealed class MainPage : Page
     {
 #if __WASM__
         var session = _editor.Session;
+        var cell = _editor.Viewport.ActiveTableRange;
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-filmstrip-realized','{_editor.RealizedFilmstripTiles}');document.documentElement.setAttribute('data-sorter-realized','{_editor.RealizedSorterTiles}');document.documentElement.setAttribute('data-table-cell-row','{cell?.Row ?? -1}');document.documentElement.setAttribute('data-table-cell-column','{cell?.Column ?? -1}');document.documentElement.setAttribute('data-primary-height','{session.PrimaryShape?.Bounds.Height.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? ""}');document.documentElement.setAttribute('data-canvas-backend','SKCanvasElement');");
         string title = Uri.EscapeDataString(session.Document.Title + " — PresentationSpace");
         string layout = Uri.EscapeDataString(session.CurrentSlide.LayoutName ?? "");
         var chart = session.PrimaryShape?.Kind == ShapeKind.Chart ? ChartModel.Get(session.PrimaryShape) : null;

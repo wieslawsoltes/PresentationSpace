@@ -27,6 +27,7 @@ public sealed partial class PresentationEditor
             Add("Chart grouping " + grouping, () => ChangeChartGrouping(grouping));
         _commands.Add(("Edit chart data", () => { if(Session.PrimaryShape?.Kind==ShapeKind.Chart) { ShowInspector(Controls.Uno.InspectorMode.Format); DispatcherQueue.TryEnqueue(()=>_format.FocusChartData()); } else Notice("Select a chart first."); }));
         BuildTableCommands();
+        BuildPerformanceCommands();
         KeyDown += HandleGlobalEditingKey;
     }
 

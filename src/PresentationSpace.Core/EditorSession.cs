@@ -20,8 +20,22 @@ public sealed class EditorSession
     public int SlideIndex { get; private set; }
     public ImmutableHashSet<Guid> Selection { get; private set; } = ImmutableHashSet<Guid>.Empty;
     public Slide CurrentSlide => Document.Slides[SlideIndex];
-    public IEnumerable<SlideShape> SelectedShapes => CurrentSlide.Shapes.Where(s => Selection.Contains(s.Id));
-    public SlideShape? PrimaryShape => SelectedShapes.LastOrDefault();
+    private ImmutableArray<SlideShape> _selectedSource, _selectedCache = [];
+    private ImmutableHashSet<Guid>? _selectedIds;
+    private ImmutableArray<SlideShape> CachedSelection
+    {
+        get
+        {
+            if (_selectedSource != CurrentSlide.Shapes || !ReferenceEquals(_selectedIds, Selection))
+            {
+                _selectedSource = CurrentSlide.Shapes; _selectedIds = Selection;
+                _selectedCache = Selection.Count == 0 ? [] : CurrentSlide.Shapes.Where(s => Selection.Contains(s.Id)).ToImmutableArray();
+            }
+            return _selectedCache;
+        }
+    }
+    public IEnumerable<SlideShape> SelectedShapes => CachedSelection;
+    public SlideShape? PrimaryShape => CachedSelection.IsEmpty ? null : CachedSelection[^1];
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
     public string UndoLabel => CanUndo ? _undo[^1].Label : "";
@@ -83,7 +97,14 @@ public sealed class EditorSession
         CommitGesture(); var before = Capture(); Document = RichText.Reconcile(Document, edit(Document)); SlideIndex = Math.Clamp(SlideIndex, 0, Document.Slides.Length - 1);
         Selection = Selection.Intersect(CurrentSlide.Shapes.Select(s => s.Id)); Push(label, before);
     }
-    public void EditSlide(string label, Func<Slide, Slide> edit) => EditDocument(label, d => d with { Slides = d.Slides.SetItem(SlideIndex, edit(d.Slides[SlideIndex])) });
+    public void EditSlide(string label, Func<Slide, Slide> edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        CommitGesture(); var before = Capture();
+        var slide = RichText.Reconcile(CurrentSlide, edit(CurrentSlide));
+        if (!ReferenceEquals(slide, CurrentSlide)) Document = Document with { Slides = Document.Slides.SetItem(SlideIndex, slide) };
+        Selection = Selection.Intersect(CurrentSlide.Shapes.Select(s => s.Id)); Push(label, before);
+    }
     public void Apply(string label, Func<SlideShape, SlideShape> edit)
     {
         if (Selection.Count == 0) return;

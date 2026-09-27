@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml.Media;
 using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
-using SkiaSharp.Views.Windows;
 using Windows.System;
 using Windows.UI.Core;
 using CPoint = PresentationSpace.Core.PointF;
@@ -15,7 +14,7 @@ namespace PresentationSpace.Controls.Uno;
 
 public sealed partial class SlideViewport : UserControl
 {
-    private readonly SKXamlCanvas _surface = new();
+    private readonly PresentationCanvas _surface = new();
     private readonly Canvas _overlay = new();
     private readonly SlideRenderer _renderer = new();
     private EditorSession? _session;
@@ -48,7 +47,7 @@ public sealed partial class SlideViewport : UserControl
         Content = root;
         AutomationProperties.SetName(this, "Slide editing canvas");
         AutomationProperties.SetAutomationId(this, "slide-canvas");
-        _surface.PaintSurface += Paint;
+        _surface.Draw += Paint;
         _surface.PointerPressed += Pressed;
         _surface.PointerMoved += Moved;
         _surface.PointerReleased += Released;
@@ -65,10 +64,14 @@ public sealed partial class SlideViewport : UserControl
 
     private void Attach() { if (!_subscribed && _session is not null) { _session.Changed += OnChanged; _subscribed = true; } }
     private void Detach() { if (_subscribed && _session is not null) _session.Changed -= OnChanged; _subscribed = false; }
+    public long DrawCount => _surface.DrawCount;
+    public double LastDrawMilliseconds => _surface.LastDrawMilliseconds;
+    public RenderCacheStatistics RenderStatistics => _renderer.CacheStatistics;
     public void Refresh() => _surface.Invalidate();
     private void OnChanged(object? sender, EditorChangedEventArgs e)
     {
         if (_textSelection is { } selection && (Session?.CurrentSlide.Id != selection.SlideId || Session?.PrimaryShape?.Id != selection.ShapeId)) _textSelection = null;
+        SynchronizeCellSelection();
         var shape = Session?.PrimaryShape;
         AutomationProperties.SetName(this, shape is null ? "Slide editing canvas" : $"Selected {shape.Kind}: {shape.Name}. {shape.AlternativeText}");
         Refresh();
@@ -89,14 +92,13 @@ public sealed partial class SlideViewport : UserControl
         Refresh();
     }
 
-    private void Paint(object? sender, SKPaintSurfaceEventArgs e)
+    private void Paint(object? sender, PresentationDrawEventArgs e)
     {
-        var canvas = e.Surface.Canvas;
-        canvas.ResetMatrix();
-        canvas.Clear(SlideRenderer.Color("#E9E9E9"));
+        var canvas = e.Canvas;
+        using (var background = new SKPaint { Color = SlideRenderer.Color("#E9E9E9") })
+            canvas.DrawRect(0, 0, (float)e.Size.Width, (float)e.Size.Height, background);
         if (Session is not { } session) return;
         var document = session.Document;
-        float dpi = (float)(e.Info.Width / Math.Max(1, ActualWidth));
         float availableWidth = Math.Max(1, (float)ActualWidth - 88);
         float availableHeight = Math.Max(1, (float)ActualHeight - 66);
         float previousZoom = Zoom;
@@ -107,7 +109,6 @@ public sealed partial class SlideViewport : UserControl
         canvas.Save();
         try
         {
-            canvas.Scale(dpi);
             using (var shadow = new SKPaint { Color = SlideRenderer.Color("#25000000"), IsAntialias = true })
                 canvas.DrawRect(_ox + 3, _oy + 4, document.Width * _scale, document.Height * _scale, shadow);
             canvas.Translate(_ox, _oy);
@@ -130,6 +131,7 @@ public sealed partial class SlideViewport : UserControl
                 canvas.DrawLine(0, document.Height / 2, document.Width, document.Height / 2, guide);
             }
             _renderer.DrawSelection(canvas, session.SelectedShapes, _scale);
+            DrawTableSelection(canvas);
             if (_marquee is { } marquee)
             {
                 using var fill = new SKPaint { Color = SlideRenderer.Color("#20D35230") };
@@ -178,6 +180,14 @@ public sealed partial class SlideViewport : UserControl
             for (int i = 0; i < handles.Length; i++)
                 if (Math.Abs(local.X - handles[i].X) < 8 / _scale && Math.Abs(local.Y - handles[i].Y) < 8 / _scale) { _handle = i; break; }
             if (Math.Abs(local.X - primary.Bounds.Center.X) < 10 / _scale && Math.Abs(local.Y - (primary.Bounds.Y - 31 / _scale)) < 10 / _scale) _handle = 8;
+        }
+        if (_handle < 0 && ActiveTable is { } active)
+        {
+            var local = Geometry.Rotate(_down, active.Bounds.Center, -active.Rotation);
+            var b = active.Bounds; float inset = 6 / _scale;
+            if (local.X > b.X + inset && local.X < b.Right - inset && local.Y > b.Y + inset && local.Y < b.Bottom - inset && SelectTableAt(_down, _additive, false))
+            { e.Handled = true; return; }
+            _cellSelection = null;
         }
         if (_handle < 0)
         {
@@ -254,13 +264,19 @@ public sealed partial class SlideViewport : UserControl
         if (Session is not { } session) return;
         var point = e.GetPosition(_surface);
         var hit = session.CurrentSlide.Shapes.Reverse().FirstOrDefault(shape => Geometry.HitTest(shape, new(((float)point.X - _ox) / _scale, ((float)point.Y - _oy) / _scale), 5 / _scale));
-        if (hit is not null && hit.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table)) { session.Select(hit.Id); EditText(); }
+        if (hit is { Kind: ShapeKind.Table, Locked: false })
+        {
+            session.Select(hit.Id);
+            SelectTableAt(new(((float)point.X - _ox) / _scale, ((float)point.Y - _oy) / _scale), false, true);
+        }
+        else if (hit is not null && hit.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table)) { session.Select(hit.Id); EditText(); }
         e.Handled = true;
     }
 
     public void EditText()
     {
         CommitText();
+        if (Session?.PrimaryShape is { Kind: ShapeKind.Table }) { EditTableCell(); return; }
         if (Session?.PrimaryShape is not { Locked: false } shape || shape.Kind is ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table) return;
         _textDraft = shape;
         _editingId = shape.Id;
@@ -291,6 +307,7 @@ public sealed partial class SlideViewport : UserControl
 
     public void CommitText()
     {
+        CommitCellText();
         if (_editor is not { } editor || Session is not { } session) return;
         var id = _editingId;
         var slideId = _editingSlideId;
@@ -330,6 +347,7 @@ public sealed partial class SlideViewport : UserControl
     }
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Handled || HandleTableKey(e)) return;
         HandleFormattingKey(sender, e);
         if (e.Handled || _editor is not null || Session is not { } session) return;
         bool ctrl = Key(VirtualKey.Control), shift = Key(VirtualKey.Shift);
