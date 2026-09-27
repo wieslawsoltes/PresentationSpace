@@ -68,6 +68,7 @@ public sealed record SlideShape
     public ImmutableArray<string> Cells { get; init; } = [];
     public ImmutableArray<float> Values { get; init; } = [];
     public ChartSpec? Chart { get; init; }
+    public TableSpec? Table { get; init; }
     public ImmutableArray<string> Labels { get; init; } = [];
 }
 
@@ -106,7 +107,7 @@ public partial class PresentationJsonContext : JsonSerializerContext;
 public static class DocumentSerializer
 {
     public const int MaxFileBytes = 64 * 1024 * 1024;
-    public static string Serialize(PresentationDocument document) => JsonSerializer.Serialize(document.Slides.Any(s => s.Shapes.Any(x => x.Chart is not null)) ? document with { SchemaVersion = 2 } : document, PresentationJsonContext.Default.PresentationDocument);
+    public static string Serialize(PresentationDocument document) => JsonSerializer.Serialize(document with { SchemaVersion = Math.Max(document.SchemaVersion, document.Slides.Any(s => s.Shapes.Any(x => x.Table is not null)) ? 3 : document.Slides.Any(s => s.Shapes.Any(x => x.Chart is not null)) ? 2 : 1) }, PresentationJsonContext.Default.PresentationDocument);
     public static PresentationDocument Deserialize(string json)
     {
         if (json.Length > MaxFileBytes) throw new InvalidDataException("Presentation exceeds the 64 MB input limit.");
@@ -116,7 +117,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();
@@ -142,6 +143,7 @@ public static class DocumentSerializer
                 }
                 if (s.Cells.IsDefault || s.Values.IsDefault || s.Labels.IsDefault || s.TableColumns < 1 || s.TableColumns > 100 || s.Values.Any(v => !float.IsFinite(v))) throw new InvalidDataException("Invalid table or chart data.");
                 if (s.Chart is { } chart) ChartModel.Validate(chart);
+                if (s.Table is { } table) TableModel.Validate(table);
                 if (s.Values.Length > ChartModel.MaxCategories) throw new InvalidDataException("Too many legacy chart values.");
                 if (s.AssetId is { } asset && !d.Assets.ContainsKey(asset)) throw new InvalidDataException("Missing image asset.");
             }

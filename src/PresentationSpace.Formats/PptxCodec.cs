@@ -203,7 +203,7 @@ public static partial class PptxCodec
                 }
                 if(node.Name==P+"graphicFrame")
                 {
-                    var table=node.Descendants(A+"tbl").FirstOrDefault();if(table is not null){shape=shape with{Kind=ShapeKind.Table,TableColumns=Math.Max(1,table.Element(A+"tblGrid")?.Elements().Count()??1),Cells=table.Elements(A+"tr").SelectMany(row=>row.Elements(A+"tc").Select(cell=>string.Join('\n',cell.Descendants(A+"p").Select(p=>string.Concat(p.Descendants(A+"t").Select(t=>t.Value)))))).ToImmutableArray(),TextStyle=style with{FontSize=20}};warnings.Add("Table cell formatting, spans and complex borders are simplified.");}
+                    var table=node.Descendants(A+"tbl").FirstOrDefault();if(table is not null){shape=ReadNativeTable(shape,table,warnings,ReadColor);}
                     else
                     {
                         var chart=node.Descendants(C+"chart").FirstOrDefault();string chartId=(string?)chart?.Attribute(R+"id")??"";

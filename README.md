@@ -14,17 +14,17 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.3 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.4 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
 
-## What is new in 0.3
+## What is new in 0.4
 
-**Six chart types, multiple series.** Create column, horizontal bar, line, area, pie and doughnut charts. Column/bar charts support clustered, stacked and 100% stacked grouping. Add/remove series, change colors, edit titles, toggle legends/data labels, set the chart background, and set doughnut hole size from the reusable chart pane.
+**Merged cells with preserved content.** Merge a rectangular selection without dropping text or mixed character styles. Split it back into its underlying grid, insert/delete rows and columns through merges, set relative track sizes, and distribute rows or columns equally. A surviving merge retains its content even when its origin row or column is deleted.
 
-**Editable data without flattening.** Paste quoted tab-separated category/series data and apply one undoable edit. Blank numeric cells remain missing values; Gap, Zero and Span control their display. Native PPTX export writes real chart parts and editable embedded XLSX workbooks for every supported series. Formula-looking labels remain text cells. Supported chart caches round-trip without replacing missing points with zero.
+**A reusable table authoring control.** The Uno `TableDataEditor` provides cell/range/row/column selection, a bounded grid navigator, explicit cell-text commits, per-cell fills and text formatting, cell margins, border widths/styles/colors, and header/banding/total-row options. Valid changes are emitted as immutable snapshots and integrated as undoable edits. Text input is a plain TextBox, not inline slide-cell WYSIWYG editing.
 
-**Shared, bounded implementation.** Core supplies immutable chart data, validation, tabular parsing, stacking and normalized axes. Skia renders those same types for the editor, slide show, PNG and PDF. The Uno chart editor has no session dependency and emits validated snapshots. Import validates series/cache limits before allocation and reports unsupported charts instead of taking only their first series.
+**Native interchange and shared rendering.** PPTX tables retain row/column proportions, rectangular merges, supported rich text, margins and explicit cell formatting. Import checks merge origins and continuations against a bounded grid. Skia uses the same model for editing, slide show, PNG/PDF and standalone `RenderTable`. Native schema 3 prevents older builds from silently flattening merged cells; schemas 1 and 2 remain readable.
 
-The 0.2 content-preserving layouts, mixed text styles, native tables, rotated resizing and alternative text remain available. See the [changelog](CHANGELOG.md) for earlier work and [compatibility](docs/compatibility.md) for exact chart and application boundaries.
+Global find/replace includes table origins and preserves cell styles. Shape formatting changes only the requested properties, and theme accents retain explicit custom cell colors. The 0.3 six-type chart pipeline and earlier layout/rich-text features remain available. See [Compatibility](docs/compatibility.md) for the supported subset and [Changelog](CHANGELOG.md) for earlier work.
 
 ## The workspace
 
@@ -33,7 +33,7 @@ The custom Uno workspace combines a compact title bar, quick-access commands, ta
 | Area | Implemented functionality |
 |---|---|
 | Slides | New, duplicate, delete, reorder, hide, non-destructive predefined layouts, backgrounds, slide sizing and numbers |
-| Objects | Text, basic geometric shapes, lines/arrows, raster pictures, uniform tables and six categorical chart types |
+| Objects | Text, basic geometric shapes, lines/arrows, raster pictures, merged/styled tables and six categorical chart types |
 | Manipulation | Multi-selection, marquee, dragging, eight resize handles, rotation, aspect constraints, snapping, nudging, pan and zoom |
 | Arrangement | Selection groups, front/back ordering, alignment/distribution, object locking and visibility |
 | Text | Mixed character styles, bullets, paragraph alignment/spacing, wrapping, vertical alignment and text editing |
@@ -82,11 +82,11 @@ Serve the distribution over HTTP(S) at the configured base path. `file://` loadi
 
 | Package | Responsibility | Dependencies |
 |---|---|---|
-| `PresentationSpace.Core` | Immutable documents, rich-text operations, layouts, chart data/axes, geometry, commands, selection and undo | No UI framework |
+| `PresentationSpace.Core` | Immutable documents, rich-text operations, layouts, tables, chart data/axes, geometry, commands, selection and undo | No UI framework |
 | `PresentationSpace.Formats` | Bounded PPTX ZIP/XML, native chart/table parts and embedded chart workbooks | Core |
-| `PresentationSpace.Rendering.Skia` | Slides, six chart types, mixed text, images, thumbnails, selection, PNG/PDF | Core + SkiaSharp |
+| `PresentationSpace.Rendering.Skia` | Slides, merged/styled tables, six chart types, mixed text, images, thumbnails, selection, PNG/PDF | Core + SkiaSharp |
 | `PresentationSpace.Ribbon.Uno` | Ribbon tabs, groups, buttons and Office-style palette | Uno |
-| `PresentationSpace.Controls.Uno` | Viewport, filmstrip, sorter, inspector, chart data editor, notes, splitters, status and slide show | Uno + renderer |
+| `PresentationSpace.Controls.Uno` | Viewport, filmstrip, sorter, inspector, table/chart data editors, notes, splitters, status and slide show | Uno + renderer |
 | `PresentationSpace.Editor.Uno` | Embeddable complete editor and injectable storage contract | Reusable libraries above |
 
 `PresentationSpace.App` is the executable host. No library references the app. CI produces six NuGet packages; automatic publication to nuget.org is not configured.
@@ -151,9 +151,29 @@ renderer.RenderChart(canvas, data, new RectF(0, 0, 640, 360), new TextStyle());
 
 `ChartDataEditor.SetValue(data)` loads the standalone Uno control; `ValueChanged` emits a validated `ChartSpec`. `ChartTabularData.Format/Parse` support spreadsheet copy/paste. `ChartModel.Apply` maintains legacy projection fields; use the chart API rather than editing those projections directly. Existing Shape Fill commands recolor the first series.
 
+### Use tables independently
+
+```csharp
+var table = TableModel.Create(rows: 4, columns: 3);
+table = TableModel.SetText(table, 0, 0, "Quarterly results");
+table = TableModel.Merge(table, new TableRange(0, 0, 1, 3));
+table = TableModel.EditCells(table, new TableRange(1, 0, 3, 3),
+    cell => cell with { Fill = "#EAF1FA", MarginLeft = 12 });
+var shape = TableModel.Apply(new SlideShape
+{
+    Name = "Results table", Bounds = new(100, 180, 960, 400)
+}, table);
+session.Insert(shape);
+renderer.RenderTable(canvas, table, new RectF(0, 0, 640, 300));
+```
+
+`TableDataEditor.SetValue(table)` loads the standalone Uno control; `ValueChanged` emits validated snapshots. `TableLayout` supplies normalized edges, merge-origin bounds and grid lookup. `TableModel.Apply` maintains compatibility projections; edit the table model rather than `Cells`/`TableColumns` directly. Limits are 100 rows, 100 columns and one million text characters per table.
+
+Select a table and open **Format Shape → Table design & layout**, or search **Edit table data**. Click a cell, Shift+click to extend the selection, or click row/column headers. Apply text with **Apply cell text** or **Ctrl+Enter** before selecting another cell. Structural/style actions apply the current valid text draft. The navigator pages through eight rows and four columns; the slide shows the entire table.
+
 ## Files, privacy and recovery
 
-Native `.pspace` preserves this application's model, including mixed text, notes, local comments and animation settings. New chart data is saved with schema version 2 so older builds reject it rather than silently losing series. Version 0.3 still reads version-1 documents. PNG/PDF are delivery formats. PPTX supports real text runs, preset shapes, embedded pictures, uniform native tables, native supported multi-series charts, notes and basic transitions. It does not preserve arbitrary unsupported OOXML parts.
+Native `.pspace` preserves this application's model, including mixed text, notes, local comments and animation settings. Structured tables use schema version 3 and charts require at least version 2, so older builds reject unsupported structure rather than silently losing it. Version 0.4 reads schemas 1, 2 and 3. PNG/PDF are delivery formats. PPTX supports real text runs, preset shapes, embedded pictures, merged/styled native tables, native supported multi-series charts, notes and basic transitions. It does not preserve arbitrary unsupported OOXML parts.
 
 Editing needs no account or server. **AutoSave means device-local recovery, not OneDrive, cloud backup or coauthoring.** Download a native file for durable storage. Browser storage can be cleared or evicted. Share exports files.
 
@@ -185,14 +205,14 @@ Browser/OS interception can vary; ribbon alternatives are available. Search incl
 The normal workflows are deliberately limited to three responsibilities:
 
 - **Build and test:** Linux, Windows and macOS matrix; headless editing/geometry/rendering tests, native serialization, PPTX round trips, independent Open XML validation of presentations and chart workbooks, and desktop compilation.
-- **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping workflows, screenshots, six-library packaging and Pages deployment.
+- **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping and table editing/merge/track workflows, screenshots, six-library packaging and Pages deployment.
 - **Release:** tag-triggered tests, self-contained desktop distributions, browser output, NuGet artifacts and a GitHub Release. Tagged release execution and signing are separate from ordinary build checks.
 
 Read each run's results rather than treating configured coverage as completed qualification. Tests establish behavior for their covered cases, not every PowerPoint file, accessibility standard, GPU, browser or production-scale workload.
 
 ## Remaining major work
 
-Complete master/layout/theme inheritance and authoring; full WYSIWYG rich text and complex-script shaping; merged/styled tables and advanced chart families/axis formatting; SmartArt, media, freeform inking and advanced drawing effects; attached connectors; Office timing trees, motion paths and second-display presenter view; `.ppt`/`.pptm`; complete accessibility and touch qualification; secure cloud coauthoring/history/administration; and pixel-level PowerPoint UI parity remain unfinished.
+Complete master/layout/theme inheritance and authoring; full WYSIWYG rich text and complex-script shaping; full Office table-style/theme fidelity and advanced chart families/axis formatting; SmartArt, media, freeform inking and advanced drawing effects; attached connectors; Office timing trees, motion paths and second-display presenter view; `.ppt`/`.pptm`; complete accessibility and touch qualification; secure cloud coauthoring/history/administration; and pixel-level PowerPoint UI parity remain unfinished.
 
 See [Compatibility](docs/compatibility.md) for precise boundaries, including typed text-overlay behavior and non-lossless PPTX import. Contributions should add tests alongside functionality and keep modules independently consumable. See [Contributing](CONTRIBUTING.md).
 

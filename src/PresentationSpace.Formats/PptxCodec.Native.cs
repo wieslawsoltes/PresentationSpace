@@ -97,28 +97,4 @@ public static partial class PptxCodec
             new XElement(A + "graphic", new XElement(A + "graphicData", V("uri", uri), data)));
     }
 
-    private static XElement NativeTable(SlideShape shape, int id)
-    {
-        int columns = shape.TableColumns, rows = Math.Max(1, (shape.Cells.Length + columns - 1) / columns);
-        float rowHeight = shape.Bounds.Height / rows;
-        var table = new XElement(A + "tbl", new XElement(A + "tblPr", V("firstRow", 1), V("bandRow", 1)),
-            new XElement(A + "tblGrid", Enumerable.Range(0, columns).Select(_ => new XElement(A + "gridCol", V("w", E(shape.Bounds.Width / columns))))));
-        for (int row = 0; row < rows; row++)
-        {
-            var tr = new XElement(A + "tr", V("h", E(rowHeight)));
-            for (int col = 0; col < columns; col++)
-            {
-                int index = row * columns + col;
-                var style = shape.TextStyle with { FontSize = Math.Min(shape.TextStyle.FontSize, Math.Max(9, rowHeight * .35f)), Color = row == 0 ? "#FFFFFF" : shape.TextStyle.Color, Bold = row == 0, VerticalAlignment = VerticalAlignment.Middle };
-                var body = TextBody(index < shape.Cells.Length ? shape.Cells[index] : "", style); body.Name = A + "txBody";
-                var properties = new XElement(A + "tcPr", V("marL", E(10)), V("marR", E(10)), V("marT", E(3)), V("marB", E(3)), V("anchor", "ctr"));
-                foreach (string edge in new[] { "lnL", "lnR", "lnT", "lnB" }) properties.Add(new XElement(A + edge, V("w", E(1)), Fill("#D8DEE8")));
-                properties.Add(Fill(row == 0 ? shape.Fill : row % 2 == 0 ? "#F1F4F8" : "#FFFFFF", shape.Opacity));
-                tr.Add(new XElement(A + "tc", body, properties));
-            }
-            table.Add(tr);
-        }
-        return GraphicFrame(shape, id, table, TableGraphicDataUri);
-    }
-
 }

@@ -1,6 +1,6 @@
 # Compatibility and limitations
 
-PresentationSpace 0.3 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
+PresentationSpace 0.4 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
 
 ## Format matrix
 
@@ -14,7 +14,7 @@ PresentationSpace 0.3 is a development preview, not a complete or pixel-exact Po
 | Alternative text | Preserved | `cNvPr` descriptions | `cNvPr` descriptions |
 | Raster pictures | Embedded assets | PNG/JPEG/GIF/WebP subset | Embedded pictures |
 | Groups | Shared selection identifiers | Flattened; complex group transforms can differ | Flattened |
-| Tables | Cell strings and uniform grid | Cell text; styling, dimensions and spans simplified | Native DrawingML table with the app's uniform style |
+| Tables | Merge-origin partition, track weights, cell text/styles/margins/borders | Supported rectangular merges, geometry and explicit cell formatting | Native DrawingML origins/continuations and supported explicit styling |
 | Charts | Immutable categories/series, nullable values, type and basic options | Column, bar, line, area, pie and doughnut caches; supported grouping/options | Native chart parts with every series and editable embedded XLSX workbooks |
 | Placeholder roles/indexes | Preserved | Roles/indexes and layout/master geometry fallback | Native placeholders and five predefined layout parts |
 | Speaker notes | Preserved | Body notes | Supported |
@@ -38,7 +38,13 @@ Rotated resizing pins the opposite handle. Marquee selection uses rotated axis-a
 
 ## Table and chart fidelity
 
-Native table export preserves an editable table structure, with the app's uniform cells, header/banding and basic text style. Import does not retain arbitrary row heights, column widths, cell formatting, merged cells, table themes or formula/data links.
+Tables now preserve rectangular merges, normalized row/column proportions, mixed character styles, margins, vertical/paragraph alignment and explicit solid cell fills and solid/dashed/dotted borders. Model operations include cell/range formatting, merge/split, row/column insertion/deletion and equal track distribution. Merge concatenates nonempty text in row-major order. Split restores the underlying grid and keeps combined text at the top-left; it is not arbitrary subdivision or recovery of pre-merge cell contents. Use Undo to restore pre-merge contents.
+
+Native export writes correct DrawingML physical cells and continuation flags; import reconstructs the visible origin partition. Dimensions are limited to 100 rows × 100 columns and total visible cell text to one million characters. Overlaps, uncovered cells, orphaned continuations and invalid extents, margins, borders and text ranges are rejected. Covered continuation text is not retained if a malformed/unusual source stores hidden text there; a warning is emitted.
+
+Referenced Office table styles and per-master theme effects are not fully resolved. Diagonal/compound/custom borders, picture/gradient/pattern fills, cell 3D effects, rotated/vertical cell text, formula/data links and Office-identical border/text-layout precedence are not implemented. Shared border conflicts use deterministic wider-border precedence. Explicit imported fills are retained, so toggling banding/header options does not replace a cell's direct formatting; reset cell formatting to use table defaults.
+
+The Uno table editor has a paged cell navigator, not a full Excel-style grid or direct slide-cell rich editor. Text input is a plain TextBox; **apply before changing selection or closing the pane**. Other table actions include the current valid text draft, but unapplied text is not recovery state. Character formatting from this pane applies to whole selected cells; imported/model-authored mixed ranges are preserved. Cell margins can be set uniformly in the pane or individually through the model. Structured tables serialize as schema 3; schemas 1 and 2 remain readable, and older builds deliberately reject schema 3.
 
 Native chart export creates chart relationships, typed caches and an embedded workbook for column, horizontal bar, line, area, pie and doughnut charts. Column/bar grouping supports clustered, stacked and 100% stacked. Other chart types use standard grouping. Positive and negative ordinary stacks accumulate separately. Pie/doughnut charts require one series; those types and 100% stacked charts require non-negative data. Unsupported conversions fail visibly without discarding series.
 

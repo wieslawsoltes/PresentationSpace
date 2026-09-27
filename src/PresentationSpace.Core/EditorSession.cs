@@ -87,7 +87,7 @@ public sealed class EditorSession
     public void Apply(string label, Func<SlideShape, SlideShape> edit)
     {
         if (Selection.Count == 0) return;
-        EditSlide(label, s => s with { Shapes = s.Shapes.Select(x => Selection.Contains(x.Id) && !x.Locked ? ReconcileChartFill(x, edit(x)) : x).ToImmutableArray() });
+        EditSlide(label, s => s with { Shapes = s.Shapes.Select(x => Selection.Contains(x.Id) && !x.Locked ? TableModel.Reconcile(x, ReconcileChartFill(x, edit(x))) : x).ToImmutableArray() });
     }
     private static SlideShape ReconcileChartFill(SlideShape before, SlideShape after)
     {
@@ -130,6 +130,11 @@ public sealed class EditorSession
     public void Insert(SlideShape shape) { EditSlide("Insert " + shape.Kind, s => s with { Shapes = s.Shapes.Add(shape) }); Select(shape.Id); }
     public void Insert(ShapeKind kind)
     {
+        if (kind == ShapeKind.Table)
+        {
+            var legacy = new SlideShape { Kind = ShapeKind.Table, Name = "Table " + (CurrentSlide.Shapes.Length + 1), Bounds = new(Document.Width * .18f, Document.Height * .25f, Document.Width * .64f, Document.Height * .5f), Cells = ["Category", "Value", "Change", "Product A", "125", "+12%", "Product B", "98", "+8%", "Product C", "156", "+24%"], TextStyle = new() { FontSize = 24 } };
+            Insert(TableModel.Apply(legacy, TableModel.Get(legacy))); return;
+        }
         if (kind == ShapeKind.Chart)
         {
             Insert(ChartModel.Apply(new SlideShape
@@ -186,6 +191,6 @@ public sealed class EditorSession
     public void ReplaceText(string find, string replacement)
     {
         if (string.IsNullOrEmpty(find)) return;
-        EditDocument("Replace text", d => d with { Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => RichTextEditing.ReplaceAll(x, find, replacement)).ToImmutableArray() }).ToImmutableArray() });
+        EditDocument("Replace text", d => d with { Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(x => x.Kind == ShapeKind.Table ? TableModel.ReplaceAll(x, find, replacement) : RichTextEditing.ReplaceAll(x, find, replacement)).ToImmutableArray() }).ToImmutableArray() });
     }
 }

@@ -49,7 +49,7 @@ public static class SlideFactory
             var result = shape with { Fill = shape.Fill == old ? accent : shape.Fill, TextStyle = shape.TextStyle with { Color = shape.TextStyle.Color == old ? accent : shape.TextStyle.Color } };
             if (shape.Chart is { } chart)
                 result = ChartModel.Apply(result, chart with { Series = chart.Series.Select(series => series.Color == old ? series with { Color = accent } : series).ToImmutableArray() });
-            return result;
+            return TableModel.Reconcile(shape, result);
         }
         return d with { Theme = name, Slides = d.Slides.Select(s => s with { Shapes = s.Shapes.Select(Retheme).ToImmutableArray() }).ToImmutableArray() };
     }

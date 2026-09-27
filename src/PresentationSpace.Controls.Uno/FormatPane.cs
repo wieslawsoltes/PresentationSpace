@@ -12,6 +12,10 @@ public sealed class FormatPane : SessionControl
 {
     private readonly StackPanel _body=new(){Spacing=13,Margin=new(16,14,16,24)};
     private readonly TextBlock _title=OfficePalette.Text("Format Shape",16,true);
+    private TableDataEditor? _tableEditor;
+    private bool _committingTable;
+    public TableDataEditor? TableEditor => _tableEditor;
+    public void FocusTableText() => _tableEditor?.FocusText();
     private ChartDataEditor? _chartEditor;
     public void FocusChartData() => _chartEditor?.FocusData();
     private bool _building;private Guid? _lastSelection;private SlideShape? _lastShape;private InspectorMode _mode;
@@ -27,9 +31,11 @@ public sealed class FormatPane : SessionControl
     }
     protected override void OnSessionChanged(bool preview)
     {
-        if(_building||Session is not {} s)return;
+        if(_building||_committingTable||Session is not {} s)return;
         if(preview&&_lastSelection==s.PrimaryShape?.Id)return;
         if(_mode==InspectorMode.Format&&ReferenceEquals(_lastShape,s.PrimaryShape)&&_lastSelection==s.PrimaryShape?.Id&&_body.Children.Count>0)return;
+        if(_mode==InspectorMode.Format && _tableEditor is not null && s.PrimaryShape is {Kind:ShapeKind.Table} table && _lastSelection==table.Id && _lastShape?.Bounds==table.Bounds && _lastShape.Rotation==table.Rotation && _lastShape.Opacity==table.Opacity && _lastShape.AlternativeText==table.AlternativeText)
+        { _lastShape=table; _tableEditor.IsEnabled=!table.Locked; _tableEditor.SetValue(TableModel.Get(table)); return; }
         Rebuild();
     }
     public void Rebuild()
@@ -37,13 +43,30 @@ public sealed class FormatPane : SessionControl
         if(_building||Session is not {} s)return;_building=true;
         try
         {
-            _chartEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
+            _chartEditor=null;_tableEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
             if(_mode==InspectorMode.Selection){BuildSelection(s);return;}if(_mode==InspectorMode.Comments){BuildComments(s);return;}
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
             Hint(shape.Name+(s.Selection.Count>1?$" · {s.Selection.Count} objects selected":""));
             Section("Accessibility");var alternative=new TextBox{Header="Alternative text",Text=shape.AlternativeText,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,FontSize=12};
             alternative.LostFocus+=(_,_)=>{if(alternative.Text!=s.PrimaryShape?.AlternativeText)s.Apply("Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
+            if(shape.Kind==ShapeKind.Table)
+            {
+                Section("Table design & layout");
+                if(s.Selection.Count==1)
+                {
+                    _tableEditor=new TableDataEditor{IsEnabled=!shape.Locked};_tableEditor.SetValue(TableModel.Get(shape));
+                    var id=shape.Id;
+                    _tableEditor.ValueChanged+=(_,table)=>
+                    {
+                        _committingTable=true;
+                        try { s.EditSlide("Edit table",slide=>slide with{Shapes=slide.Shapes.Select(x=>x.Id==id&&!x.Locked?TableModel.Apply(x,table):x).ToImmutableArray()}); _lastShape=s.PrimaryShape; }
+                        finally { _committingTable=false; }
+                    };
+                    _body.Children.Add(_tableEditor);
+                }
+                else Hint("Select one table to edit its cells.");
+            }
             if(shape.Kind==ShapeKind.Chart)
             {
                 Section("Chart design");
@@ -56,23 +79,17 @@ public sealed class FormatPane : SessionControl
                 }
                 else Hint("Select one chart to edit its data and design.");
             }
-            else {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));}
+            else if(shape.Kind!=ShapeKind.Table) {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));}
             Section("Size & position");
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));
             NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,8,16384)}}));
             NumericPair("Rotation",shape.Rotation,v=>s.Apply("Rotation",x=>x with{Rotation=v%360}),"Opacity %",shape.Opacity*100,v=>s.Apply("Opacity",x=>x with{Opacity=Math.Clamp(v/100,0,1)}));
-            Section("Line");Palette(color=>s.Apply("Outline color",x=>x with{Stroke=color}));Number("Line width",shape.StrokeWidth,v=>s.Apply("Outline width",x=>x with{StrokeWidth=Math.Clamp(v,0,100)}));
+            if(shape.Kind!=ShapeKind.Table){Section("Line");Palette(color=>s.Apply("Outline color",x=>x with{Stroke=color}));Number("Line width",shape.StrokeWidth,v=>s.Apply("Outline width",x=>x with{StrokeWidth=Math.Clamp(v,0,100)}));}
             if(shape.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table))
             {
                 Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.LostFocus+=(_,_)=>{if(text.Text!=s.PrimaryShape?.Text)s.Apply("Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
                 Number("Font size",shape.TextStyle.FontSize,v=>s.Apply("Font size",x=>x with{TextStyle=x.TextStyle with{FontSize=Math.Clamp(v,1,512)}}));Palette(color=>s.Apply("Text color",x=>x with{TextStyle=x.TextStyle with{Color=color}}));
                 Choice("Vertical alignment",Enum.GetNames<Core.VerticalAlignment>(),shape.TextStyle.VerticalAlignment.ToString(),value=>s.Apply("Text vertical alignment",x=>x with{TextStyle=x.TextStyle with{VerticalAlignment=Enum.Parse<Core.VerticalAlignment>(value)}}));
-            }
-            if(shape.Kind==ShapeKind.Table)
-            {
-                Section("Table data");Hint("Separate columns with tabs and rows with new lines.");
-                var rows=shape.Cells.Chunk(shape.TableColumns).Select(r=>string.Join('\t',r));var data=new TextBox{Text=string.Join('\n',rows),AcceptsReturn=true,TextWrapping=TextWrapping.NoWrap,MinHeight=110,FontSize=12};_body.Children.Add(data);
-                ActionButton("Apply table data",()=>{var cells=data.Text.Split('\n').Take(100).Select(r=>r.Split('\t').Take(30).ToArray()).ToArray();int columns=Math.Max(1,cells.Max(r=>r.Length));s.Apply("Edit table data",x=>x with{TableColumns=columns,Cells=cells.SelectMany(row=>Enumerable.Range(0,columns).Select(i=>i<row.Length?row[i]:"")).ToImmutableArray()});});
             }
             Section("Arrange");var arrange=new StackPanel{Orientation=Orientation.Horizontal,Spacing=6};arrange.Children.Add(Button("Bring forward",s.BringToFront));arrange.Children.Add(Button("Send backward",s.SendToBack));_body.Children.Add(arrange);
         }
