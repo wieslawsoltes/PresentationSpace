@@ -44,7 +44,7 @@ public static partial class PptxCodec
         border.Width == 0 ? new XElement(A + "noFill") : Fill(border.Color, opacity),
         new XElement(A + "prstDash", V("val", border.Dash switch { TableBorderDash.Dash => "dash", TableBorderDash.Dot => "dot", _ => "solid" })));
 
-    private static SlideShape ReadNativeTable(SlideShape shape, XElement xml, List<string> warnings, Func<XElement?, string, string> color)
+    private static SlideShape ReadNativeTable(SlideShape shape, XElement xml, ICollection<string> warnings, Func<XElement?, string, string> color)
     {
         var columns = xml.Element(A + "tblGrid")?.Elements(A + "gridCol").Take(TableModel.MaxColumns + 1).ToArray() ?? [];
         var rows = xml.Elements(A + "tr").Take(TableModel.MaxRows + 1).ToArray();
