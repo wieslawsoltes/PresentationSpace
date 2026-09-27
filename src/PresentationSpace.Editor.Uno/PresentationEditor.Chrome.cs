@@ -89,6 +89,12 @@ public sealed partial class PresentationEditor
         right.Children.Add(_commentsQuick); right.Children.Add(_presentQuick); right.Children.Add(_shareQuick); right.Children.Add(_moreQuick);
         Grid.SetColumn(right, 3); bar.Children.Add(right);
         _searchFlyout.Content = _compactSearch;
+        _searchFlyout.Opened += (_, _) =>
+        {
+            if (!_commandQueued && _compactSearch.XamlRoot is { } root &&
+                !IsSearchDescendant(FocusManager.GetFocusedElement(root) as DependencyObject, _compactSearch))
+                _compactSearch.Focus(FocusState.Programmatic);
+        };
         AutomationProperties.SetName(_compactSearch, "Search commands");
         return bar;
     }
@@ -122,8 +128,8 @@ public sealed partial class PresentationEditor
         _formatColumn.Width = new GridLength(docked ? 296 : 0);
         _workspace.ColumnDefinitions[3].Width = new GridLength(docked ? 5 : 0);
         Visible(_rightSplitter, docked); Visible(_format, _inspectorOpen);
-        Grid.SetColumn(_format, docked ? 4 : 2); Grid.SetColumnSpan(_format, docked ? 1 : 3);
-        _format.Width = docked ? double.NaN : Math.Min(320, Math.Max(0, width - (film ? _filmColumn.Width.Value + 5 : 0) - 8));
+        Grid.SetColumn(_format, docked ? 4 : 0); Grid.SetColumnSpan(_format, docked ? 1 : 5);
+        _format.Width = docked ? double.NaN : Math.Min(320, Math.Max(0, width - 8));
         _format.HorizontalAlignment = docked ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
         _notesRow.Height = new GridLength(_notesVisible && height >= 520 ? 86 : 0);
         Visible(_notes, _notesVisible && height >= 520);

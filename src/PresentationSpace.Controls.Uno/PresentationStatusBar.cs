@@ -43,7 +43,7 @@ public sealed class PresentationStatusBar : SessionControl
         {
             _zoom.Visibility = ActualWidth >= 700 ? Visibility.Visible : Visibility.Collapsed;
             _message.Visibility = ActualWidth >= 1000 ? Visibility.Visible : Visibility.Collapsed;
-            _position.MaxWidth = ActualWidth < 520 ? 100 : 240;
+            _position.MaxWidth = ActualWidth < 360 ? 72 : ActualWidth < 520 ? 100 : 240;
             _notesButton.Content = ActualWidth < 520 ? "▤" : "Notes";
         };
     }

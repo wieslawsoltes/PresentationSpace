@@ -1,5 +1,8 @@
 """Real-input shell sizing and table-design regressions. Diagnostics are read-only arranged geometry."""
 import json
+import io
+import traceback
+from PIL import Image
 import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -7,7 +10,7 @@ from playwright.sync_api import sync_playwright
 out = Path('artifacts/screenshots')
 out.mkdir(parents=True, exist_ok=True)
 url = os.environ.get('PRESENTATIONSPACE_URL', 'http://127.0.0.1:8080/PresentationSpace/')
-errors, observations = [], []
+errors, observations, failures = [], [], []
 with sync_playwright() as p:
     browser = p.chromium.launch(args=['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
     context = browser.new_context(viewport={'width': 1440, 'height': 1000})
@@ -33,6 +36,21 @@ with sync_playwright() as p:
         rect = chrome()[name]
         assert rect['visible'], (name, rect)
         page.mouse.click(rect['x'] + rect['width'] / 2, rect['y'] + rect['height'] / 2)
+    def check_switch_pixels():
+        # Bounds alone would miss a theme painting a rectangular checked background.
+        # Sample the hit-target padding, away from the pill and the outer focus ring.
+        layout = chrome()
+        rect = layout['autosave-switch']
+        page.mouse.move(300, 120)
+        settle()
+        image = Image.open(io.BytesIO(page.screenshot())).convert('RGB')
+        scale = page.evaluate('window.devicePixelRatio')
+        def pixel(x, y):
+            return image.getpixel((round(x * scale), round(y * scale)))
+        background = pixel(2, 22)
+        for y in [rect['y'] + 3, rect['y'] + rect['height'] - 4]:
+            sample = pixel(rect['x'] + rect['width'] / 2, y)
+            assert max(abs(a-b) for a, b in zip(background, sample)) <= 4, (background, sample, rect)
     def check_layout(width):
         layout = chrome()
         order = ['title-logo','autosave-label','autosave-switch','quick-save','quick-undo','quick-redo','document-title','command-search','quick-comments','quick-present','quick-share','quick-more']
@@ -63,6 +81,7 @@ with sync_playwright() as p:
         attr('data-autosave', 'false')
         page.keyboard.press('Space')
         attr('data-autosave', 'true')
+        check_switch_pixels()
         # Exercise the real rename dialog with a maximum-length title before resizing.
         click('document-title')
         page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'INPUT'")
@@ -127,6 +146,9 @@ with sync_playwright() as p:
         command('Format shape')
         pane = chrome()['format-pane']
         assert pane['visible'] and pane['x'] >= 0 and pane['x'] + pane['width'] <= 390.5, pane
+        command('Toggle slide thumbnails')
+        pane = chrome()['format-pane']
+        assert pane['width'] >= 296 and pane['x'] >= 0 and pane['x'] + pane['width'] <= 390.5, pane
         page.screenshot(path=str(out / 'chrome-compact-inspector.png'))
         command('Close format pane')
         # Fresh high-DPI context also exercises the startup layout at compact, low height.
@@ -140,13 +162,20 @@ with sync_playwright() as p:
         check_layout(720)
         click('autosave-switch'); attr('data-autosave', 'false')
         page.keyboard.press('Space'); attr('data-autosave', 'true')
+        check_switch_pixels()
         for name in ['workspace', 'status-bar']:
             rect = chrome()[name]
             assert rect['y'] + rect['height'] <= 500.5, (name, rect)
         page.screenshot(path=str(out / 'chrome-hidpi.png'))
         print('PASS: long titles, pointer ribbon scrolling, compact inspector and 2x-scale low-height startup.', flush=True)
         assert not errors, errors
+    except Exception:
+        failures.append(traceback.format_exc())
+        raise
     finally:
-        page.screenshot(path=str(out / 'chrome-final.png'))
-        (out / 'browser-chrome.json').write_text(json.dumps({'observations': observations, 'errors': errors}, indent=2))
+        try:
+            page.screenshot(path=str(out / 'chrome-final.png'))
+        except Exception as error:
+            errors.append('Final screenshot: ' + str(error))
+        (out / 'browser-chrome.json').write_text(json.dumps({'observations': observations, 'errors': errors, 'failures': failures}, indent=2))
         context.close(); browser.close()

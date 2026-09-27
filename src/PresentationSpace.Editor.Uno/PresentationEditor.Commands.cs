@@ -14,16 +14,32 @@ public sealed partial class PresentationEditor
         if (_commandQueued) return;
         void Focus(AutoSuggestBox search)
         {
-            search.ApplyTemplate(); search.Focus(FocusState.Programmatic);
+            search.ApplyTemplate();
             FindSearchTextBox(search)?.SelectAll();
+            search.Focus(FocusState.Programmatic);
         }
         if (_search.Visibility == Visibility.Visible) Focus(_search);
         else if (_moreQuick is not null)
         {
             _compactSearch.Width = Math.Clamp(ActualWidth - 64, 200, 440);
+            // Select the previous query before ShowAt makes the native input available.
+            // A deferred SelectAll can run after the user has started typing and erase
+            // the beginning of the new command. Flyout/Open handles focus without
+            // changing the selection again once input is already focused.
+            _compactSearch.ApplyTemplate();
+            FindSearchTextBox(_compactSearch)?.SelectAll();
             _searchFlyout.ShowAt(_moreQuick);
-            DispatcherQueue.TryEnqueue(() => Focus(_compactSearch));
         }
+    }
+
+    private static bool IsSearchDescendant(DependencyObject? element, AutoSuggestBox search)
+    {
+        while (element is not null)
+        {
+            if (ReferenceEquals(element, search)) return true;
+            element = VisualTreeHelper.GetParent(element);
+        }
+        return false;
     }
 
     private static TextBox? FindSearchTextBox(DependencyObject parent)
