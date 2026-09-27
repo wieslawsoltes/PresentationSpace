@@ -158,6 +158,9 @@ with sync_playwright() as p:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready'", timeout=120000)
+        # The semantic diagnostics are dispatched separately from the first painted frame.
+        # Wait for this new context's arranged geometry, as the primary context does.
+        page.wait_for_function('() => {const value=document.documentElement.getAttribute("data-ui-chrome"); return value && JSON.parse(value)["title-bar"].width === 720;}', timeout=20000)
         settle()
         check_layout(720)
         click('autosave-switch'); attr('data-autosave', 'false')
