@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>Immutable presentation model, geometry, editing commands and transactional undo without a UI dependency.</Description>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+</Project>

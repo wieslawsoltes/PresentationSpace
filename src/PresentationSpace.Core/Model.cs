@@ -1,0 +1,134 @@
+using System.Collections.Immutable;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace PresentationSpace.Core;
+
+public enum ShapeKind { Text, Rectangle, RoundRectangle, Ellipse, Triangle, Diamond, Line, Arrow, Image, Table, Chart }
+public enum ParagraphAlignment { Left, Center, Right }
+public enum VerticalAlignment { Top, Middle, Bottom }
+public enum TransitionKind { None, Fade, Push, Wipe }
+public enum AnimationKind { None, Appear, Fade, FlyIn }
+public enum AlignKind { Left, Center, Right, Top, Middle, Bottom }
+
+public readonly record struct PointF(float X, float Y);
+public readonly record struct RectF(float X, float Y, float Width, float Height)
+{
+    [JsonIgnore] public float Right => X + Width;
+    [JsonIgnore] public float Bottom => Y + Height;
+    [JsonIgnore] public PointF Center => new(X + Width / 2, Y + Height / 2);
+    public bool Contains(PointF p) => p.X >= X && p.X <= Right && p.Y >= Y && p.Y <= Bottom;
+    public bool Intersects(RectF r) => X <= r.Right && Right >= r.X && Y <= r.Bottom && Bottom >= r.Y;
+    public static RectF Between(PointF a, PointF b) => new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+}
+
+public sealed record TextStyle
+{
+    public string FontFamily { get; init; } = "Arial";
+    public float FontSize { get; init; } = 28;
+    public bool Bold { get; init; }
+    public bool Italic { get; init; }
+    public bool Underline { get; init; }
+    public bool Bullets { get; init; }
+    public string Color { get; init; } = "#243247";
+    public ParagraphAlignment Alignment { get; init; }
+    public VerticalAlignment VerticalAlignment { get; init; }
+    public float LineSpacing { get; init; } = 1.15f;
+}
+
+public sealed record SlideShape
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public string Name { get; init; } = "Shape";
+    public ShapeKind Kind { get; init; } = ShapeKind.Rectangle;
+    public RectF Bounds { get; init; } = new(100, 100, 260, 140);
+    public float Rotation { get; init; }
+    public string Fill { get; init; } = "#D35230";
+    public string Stroke { get; init; } = "#00000000";
+    public float StrokeWidth { get; init; } = 1.5f;
+    public float Opacity { get; init; } = 1;
+    public string Text { get; init; } = "";
+    public TextStyle TextStyle { get; init; } = new();
+    public string? AssetId { get; init; }
+    public Guid? GroupId { get; init; }
+    public bool Locked { get; init; }
+    public bool Hidden { get; init; }
+    public AnimationKind Animation { get; init; }
+    public int AnimationOrder { get; init; }
+    public float AnimationDuration { get; init; } = 0.5f;
+    public int TableColumns { get; init; } = 3;
+    public ImmutableArray<string> Cells { get; init; } = [];
+    public ImmutableArray<float> Values { get; init; } = [];
+    public ImmutableArray<string> Labels { get; init; } = [];
+}
+
+public sealed record SlideComment(Guid Id, string Author, string Text, DateTimeOffset Created, bool Resolved = false);
+public sealed record PresentationAsset(string Id, string MimeType, string Base64);
+public sealed record Slide
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public string Name { get; init; } = "Untitled slide";
+    public string Background { get; init; } = "#FFFFFF";
+    public ImmutableArray<SlideShape> Shapes { get; init; } = [];
+    public string Notes { get; init; } = "";
+    public bool Hidden { get; init; }
+    public TransitionKind Transition { get; init; }
+    public float TransitionDuration { get; init; } = 0.5f;
+    public ImmutableArray<SlideComment> Comments { get; init; } = [];
+}
+
+public sealed record PresentationDocument
+{
+    public int SchemaVersion { get; init; } = 1;
+    public string Title { get; init; } = "Presentation";
+    public float Width { get; init; } = 1280;
+    public float Height { get; init; } = 720;
+    public string Theme { get; init; } = "Office";
+    public ImmutableArray<Slide> Slides { get; init; } = [new()];
+    public ImmutableDictionary<string, PresentationAsset> Assets { get; init; } = ImmutableDictionary<string, PresentationAsset>.Empty;
+}
+
+[JsonSourceGenerationOptions(WriteIndented = true, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(PresentationDocument))]
+[JsonSerializable(typeof(SlideShape[]))]
+public partial class PresentationJsonContext : JsonSerializerContext;
+
+public static class DocumentSerializer
+{
+    public const int MaxFileBytes = 64 * 1024 * 1024;
+    public static string Serialize(PresentationDocument document) => JsonSerializer.Serialize(document, PresentationJsonContext.Default.PresentationDocument);
+    public static PresentationDocument Deserialize(string json)
+    {
+        if (json.Length > MaxFileBytes) throw new InvalidDataException("Presentation exceeds the 64 MB input limit.");
+        var document = JsonSerializer.Deserialize(json, PresentationJsonContext.Default.PresentationDocument) ?? throw new InvalidDataException("Empty presentation.");
+        Validate(document);
+        return document;
+    }
+    public static void Validate(PresentationDocument d)
+    {
+        if (d.SchemaVersion != 1) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
+        if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
+        var ids = new HashSet<Guid>();
+        int total = 0;
+        foreach (var slide in d.Slides)
+        {
+            if (slide is null || !ids.Add(slide.Id) || slide.Shapes.IsDefault || slide.Comments.IsDefault) throw new InvalidDataException("Invalid or duplicate slide.");
+            if (!float.IsFinite(slide.TransitionDuration) || slide.TransitionDuration < 0 || slide.TransitionDuration > 60) throw new InvalidDataException("Invalid transition duration.");
+            foreach (var s in slide.Shapes)
+            {
+                if (++total > 20000 || s is null || !ids.Add(s.Id)) throw new InvalidDataException("Too many shapes or duplicate identifiers.");
+                var b = s.Bounds;
+                if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height) || b.Width <= 0 || b.Height <= 0 || Math.Abs(b.X) > 100000 || Math.Abs(b.Y) > 100000 || b.Width > 100000 || b.Height > 100000) throw new InvalidDataException("Invalid shape geometry.");
+                if (s.TextStyle is null || !float.IsFinite(s.TextStyle.FontSize) || s.TextStyle.FontSize < 1 || s.TextStyle.FontSize > 2048 || !float.IsFinite(s.Rotation) || !float.IsFinite(s.Opacity) || s.Opacity < 0 || s.Opacity > 1 || !float.IsFinite(s.StrokeWidth) || s.StrokeWidth < 0 || s.StrokeWidth > 1000 || !float.IsFinite(s.TextStyle.LineSpacing) || s.TextStyle.LineSpacing <= 0 || s.TextStyle.LineSpacing > 10) throw new InvalidDataException("Invalid shape styling.");
+                if (s.Cells.IsDefault || s.Values.IsDefault || s.Labels.IsDefault || s.TableColumns < 1 || s.TableColumns > 100 || s.Values.Any(v => !float.IsFinite(v))) throw new InvalidDataException("Invalid table or chart data.");
+                if (s.AssetId is { } asset && !d.Assets.ContainsKey(asset)) throw new InvalidDataException("Missing image asset.");
+            }
+        }
+        foreach (var (key, asset) in d.Assets)
+        {
+            if (asset is null || key != asset.Id || asset.Base64.Length > 32 * 1024 * 1024) throw new InvalidDataException("Invalid or oversized asset.");
+            try { _ = Convert.FromBase64String(asset.Base64); } catch (FormatException e) { throw new InvalidDataException("Invalid image encoding.", e); }
+        }
+    }
+}
