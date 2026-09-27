@@ -1,0 +1,14 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
+    <UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures>
+    <Description>Reusable Skia slide viewport, filmstrip, inspector, notes, sorter and presenter controls for Uno Platform.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PresentationSpace.Core/PresentationSpace.Core.csproj" />
+    <ProjectReference Include="../PresentationSpace.Rendering.Skia/PresentationSpace.Rendering.Skia.csproj" />
+    <ProjectReference Include="../PresentationSpace.Ribbon.Uno/PresentationSpace.Ribbon.Uno.csproj" />
+    <PackageReference Include="SkiaSharp.Views.Uno.WinUI" Version="3.119.2" />
+  </ItemGroup>
+</Project>

@@ -7,7 +7,7 @@ public sealed class EditorChangedEventArgs(bool preview = false) : EventArgs
     public bool IsPreview { get; } = preview;
 }
 
-/// <summary>UI-independent, immutable editing session. A gesture creates one undo entry, not one per pointer event.</summary>
+/// <summary>UI-independent immutable editing. A pointer gesture creates exactly one undo entry.</summary>
 public sealed class EditorSession
 {
     private sealed record State(PresentationDocument Document, int SlideIndex, ImmutableHashSet<Guid> Selection);
@@ -30,9 +30,15 @@ public sealed class EditorSession
     public bool SnapToGrid { get; set; } = true;
     public float GridSize { get; set; } = 8;
     public event EventHandler<EditorChangedEventArgs>? Changed;
-    public EditorSession(PresentationDocument? document = null) { Document = document ?? new(); DocumentSerializer.Validate(Document); _saved = Document; }
+    public EditorSession(PresentationDocument? document = null)
+    {
+        Document = document ?? new(); DocumentSerializer.Validate(Document); _saved = Document;
+    }
     private State Capture() => new(Document, SlideIndex, Selection);
-    private void Restore(State state) { Document = state.Document; SlideIndex = Math.Clamp(state.SlideIndex, 0, Document.Slides.Length - 1); Selection = state.Selection; Notify(); }
+    private void Restore(State state)
+    {
+        Document = state.Document; SlideIndex = Math.Clamp(state.SlideIndex, 0, Document.Slides.Length - 1); Selection = state.Selection; Notify();
+    }
     private void Notify(bool preview = false) => Changed?.Invoke(this, new(preview));
     private void Push(string label, State before)
     {
@@ -59,7 +65,7 @@ public sealed class EditorSession
             var shape = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == value);
             if (shape is not null)
             {
-                var ids = shape.GroupId is { } g ? CurrentSlide.Shapes.Where(s => s.GroupId == g).Select(s => s.Id) : [value];
+                IEnumerable<Guid> ids = shape.GroupId is { } g ? CurrentSlide.Shapes.Where(s => s.GroupId == g).Select(s => s.Id) : [value];
                 bool remove = additive && Selection.Contains(value);
                 Selection = remove ? Selection.Except(ids) : Selection.Union(ids);
             }
@@ -96,12 +102,12 @@ public sealed class EditorSession
     public void Redo() { CancelGesture(); if (!CanRedo) return; var e = _redo[^1]; _redo.RemoveAt(_redo.Count - 1); _undo.Add(e); Restore(e.After); }
     public void AddSlide(string layout = "Title and content")
     {
-        var slide = SlideFactory.Create(layout, Document.Width, Document.Height);
+        CommitGesture(); var slide = SlideFactory.Create(layout, Document.Width, Document.Height);
         var before = Capture(); Document = Document with { Slides = Document.Slides.Insert(SlideIndex + 1, slide) }; SlideIndex++; Selection = ImmutableHashSet<Guid>.Empty; Push("New slide", before);
     }
     public void DuplicateSlide()
     {
-        var source = CurrentSlide;
+        CommitGesture(); var source = CurrentSlide;
         var groups = source.Shapes.Where(s => s.GroupId != null).Select(s => s.GroupId!.Value).Distinct().ToDictionary(g => g, _ => Guid.NewGuid());
         var slide = source with { Id = Guid.NewGuid(), Name = source.Name + " copy", Shapes = source.Shapes.Select(s => s with { Id = Guid.NewGuid(), GroupId = s.GroupId is { } g ? groups[g] : null }).ToImmutableArray(), Comments = [] };
         var before = Capture(); Document = Document with { Slides = Document.Slides.Insert(++SlideIndex, slide) }; Selection = ImmutableHashSet<Guid>.Empty; Push("Duplicate slide", before);
@@ -114,13 +120,13 @@ public sealed class EditorSession
     public void MoveSlide(int from, int to)
     {
         if (from < 0 || from >= Document.Slides.Length || to < 0 || to >= Document.Slides.Length || from == to) return;
-        var before = Capture(); var slide = Document.Slides[from]; Document = Document with { Slides = Document.Slides.RemoveAt(from).Insert(to, slide) }; SlideIndex = to; Selection = ImmutableHashSet<Guid>.Empty; Push("Reorder slide", before);
+        CommitGesture(); var before = Capture(); var slide = Document.Slides[from]; Document = Document with { Slides = Document.Slides.RemoveAt(from).Insert(to, slide) }; SlideIndex = to; Selection = ImmutableHashSet<Guid>.Empty; Push("Reorder slide", before);
     }
     public void Insert(SlideShape shape) { EditSlide("Insert " + shape.Kind, s => s with { Shapes = s.Shapes.Add(shape) }); Select(shape.Id); }
     public void Insert(ShapeKind kind)
     {
         float x = Document.Width * 0.28f, y = Document.Height * 0.3f;
-        Insert(new() { Kind = kind, Name = kind + " " + (CurrentSlide.Shapes.Length + 1), Bounds = new(x,y,kind == ShapeKind.Text ? 500 : 320,kind == ShapeKind.Text ? 90 : 190), Text = kind == ShapeKind.Text ? "Your text here" : "", Fill = kind == ShapeKind.Text || kind is ShapeKind.Line or ShapeKind.Arrow ? "#00000000" : "#D35230", Stroke = kind is ShapeKind.Line or ShapeKind.Arrow ? "#D35230" : "#00000000", StrokeWidth = kind is ShapeKind.Line or ShapeKind.Arrow ? 4 : 1.5f,
+        Insert(new SlideShape { Kind = kind, Name = kind + " " + (CurrentSlide.Shapes.Length + 1), Bounds = new(x,y,kind == ShapeKind.Text ? 500 : 320,kind == ShapeKind.Text ? 90 : 190), Text = kind == ShapeKind.Text ? "Your text here" : "", Fill = kind == ShapeKind.Text || kind is ShapeKind.Line or ShapeKind.Arrow ? "#00000000" : "#D35230", Stroke = kind is ShapeKind.Line or ShapeKind.Arrow ? "#D35230" : "#00000000", StrokeWidth = kind is ShapeKind.Line or ShapeKind.Arrow ? 4 : 1.5f,
             Cells = kind == ShapeKind.Table ? ["Category","Value","Change","Product A","125","+12%","Product B","98","+8%","Product C","156","+24%"] : [], Values = kind == ShapeKind.Chart ? [42,68,54,89] : [], Labels = kind == ShapeKind.Chart ? ["Q1","Q2","Q3","Q4"] : [] });
     }
     public void InsertImage(byte[] data, string mime, string name)
