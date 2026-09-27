@@ -1,0 +1,300 @@
+diff --git a/src/PresentationSpace.Core/EditorSession.cs b/src/PresentationSpace.Core/EditorSession.cs
+index 3509478..097f6a3 100644
+--- a/src/PresentationSpace.Core/EditorSession.cs
++++ b/src/PresentationSpace.Core/EditorSession.cs
+@@ -78 +78 @@ public sealed class EditorSession
+-        var ids = CurrentSlide.Shapes.Where(s => !s.Locked && !s.Hidden && bounds.Intersects(s.Bounds)).Select(s => s.Id);
++        var ids = CurrentSlide.Shapes.Where(s => !s.Locked && !s.Hidden && bounds.Intersects(Geometry.VisualBounds(s))).Select(s => s.Id);
+@@ -83 +83 @@ public sealed class EditorSession
+-        CommitGesture(); var before = Capture(); Document = edit(Document); SlideIndex = Math.Clamp(SlideIndex, 0, Document.Slides.Length - 1);
++        CommitGesture(); var before = Capture(); Document = RichText.Reconcile(Document, edit(Document)); SlideIndex = Math.Clamp(SlideIndex, 0, Document.Slides.Length - 1);
+diff --git a/src/PresentationSpace.Core/Geometry.Transforms.cs b/src/PresentationSpace.Core/Geometry.Transforms.cs
+new file mode 100644
+index 0000000..39af9ad
+--- /dev/null
++++ b/src/PresentationSpace.Core/Geometry.Transforms.cs
+@@ -0,0 +1,23 @@
++namespace PresentationSpace.Core;
++
++public static partial class Geometry
++{
++    /// <summary>Resize in local coordinates while keeping the opposite handle stationary in slide coordinates.</summary>
++    public static RectF ResizeRotated(RectF original, float rotation, int handle, PointF localDelta, bool keepAspect)
++    {
++        if (handle is < 0 or > 7) throw new ArgumentOutOfRangeException(nameof(handle));
++        var resized = Resize(original, handle, localDelta, keepAspect);
++        int opposite = (handle + 4) % 8;
++        var fixedBefore = Rotate(Handles(original)[opposite], original.Center, rotation);
++        var fixedAfter = Rotate(Handles(resized)[opposite], resized.Center, rotation);
++        return resized with { X = resized.X + fixedBefore.X - fixedAfter.X, Y = resized.Y + fixedBefore.Y - fixedAfter.Y };
++    }
++
++    public static RectF VisualBounds(SlideShape shape)
++    {
++        var points = Handles(shape.Bounds).Where((_, index) => index % 2 == 0)
++            .Select(point => Rotate(point, shape.Bounds.Center, shape.Rotation)).ToArray();
++        float x = points.Min(p => p.X), y = points.Min(p => p.Y);
++        return new(x, y, points.Max(p => p.X) - x, points.Max(p => p.Y) - y);
++    }
++}
+diff --git a/src/PresentationSpace.Core/Geometry.cs b/src/PresentationSpace.Core/Geometry.cs
+index ec9a110..a77edd2 100644
+--- a/src/PresentationSpace.Core/Geometry.cs
++++ b/src/PresentationSpace.Core/Geometry.cs
+@@ -3 +3 @@ namespace PresentationSpace.Core;
+-public static class Geometry
++public static partial class Geometry
+@@ -26,0 +27,5 @@ public static class Geometry
++        if (shape.Kind == ShapeKind.Triangle)
++        {
++            float fraction = (p.Y - b.Y) / b.Height;
++            return Math.Abs(p.X - b.Center.X) <= b.Width * fraction / 2;
++        }
+@@ -39,9 +44,15 @@ public static class Geometry
+-        float x = original.X, y = original.Y, w = original.Width, h = original.Height;
+-        if (handle is 0 or 6 or 7) { x += delta.X; w -= delta.X; }
+-        if (handle is 2 or 3 or 4) w += delta.X;
+-        if (handle is 0 or 1 or 2) { y += delta.Y; h -= delta.Y; }
+-        if (handle is 4 or 5 or 6) h += delta.Y;
+-        w = Math.Max(8, w); h = Math.Max(8, h);
+-        if (keepAspect) { h = w * original.Height / original.Width; if (handle is 0 or 1 or 2) y = original.Bottom - h; }
+-        if (handle is 0 or 6 or 7) x = original.Right - w;
+-        if (handle is 0 or 1 or 2) y = original.Bottom - h;
++        if (handle is < 0 or > 7) throw new ArgumentOutOfRangeException(nameof(handle));
++        bool left = handle is 0 or 6 or 7, right = handle is 2 or 3 or 4;
++        bool top = handle is 0 or 1 or 2, bottom = handle is 4 or 5 or 6;
++        float w = original.Width + (left ? -delta.X : right ? delta.X : 0);
++        float h = original.Height + (top ? -delta.Y : bottom ? delta.Y : 0);
++        if (keepAspect)
++        {
++            float sx = w / original.Width, sy = h / original.Height;
++            float scale = !(left || right) ? sy : !(top || bottom) ? sx : Math.Abs(sx - 1) >= Math.Abs(sy - 1) ? sx : sy;
++            scale = Math.Max(scale, Math.Max(8 / original.Width, 8 / original.Height));
++            w = original.Width * scale; h = original.Height * scale;
++        }
++        else { w = Math.Max(8, w); h = Math.Max(8, h); }
++        float x = left ? original.Right - w : right ? original.X : original.Center.X - w / 2;
++        float y = top ? original.Bottom - h : bottom ? original.Y : original.Center.Y - h / 2;
+diff --git a/src/PresentationSpace.Core/Model.cs b/src/PresentationSpace.Core/Model.cs
+index ee588bd..832ba73 100644
+--- a/src/PresentationSpace.Core/Model.cs
++++ b/src/PresentationSpace.Core/Model.cs
+@@ -11,0 +12 @@ public enum AnimationKind { None, Appear, Fade, FlyIn }
++public enum PlaceholderKind { None, Title, Subtitle, Body, Object, Footer, SlideNumber, Date }
+@@ -38,0 +40,3 @@ public sealed record TextStyle
++/// <summary>A non-overlapping UTF-16 text range with explicit character formatting.</summary>
++public sealed record TextRangeStyle(int Start, int Length, TextStyle Style);
++
+@@ -51,0 +56,4 @@ public sealed record SlideShape
++    public ImmutableArray<TextRangeStyle> TextRanges { get; init; } = [];
++    public PlaceholderKind Placeholder { get; init; }
++    public int PlaceholderIndex { get; init; }
++    public string AlternativeText { get; init; } = "";
+@@ -72,0 +81 @@ public sealed record Slide
++    public string? LayoutName { get; init; }
+@@ -123,0 +133,9 @@ public static class DocumentSerializer
++                if (s.Text is null || s.TextRanges.IsDefault || !Enum.IsDefined(s.Placeholder) || s.PlaceholderIndex < 0) throw new InvalidDataException("Invalid text or placeholder.");
++                int rangeEnd = 0;
++                foreach (var range in s.TextRanges)
++                {
++                    if (range is null || range.Style is null || range.Start < rangeEnd || range.Length <= 0 || range.Start > s.Text.Length - range.Length || !RichText.IsBoundary(s.Text, range.Start) || !RichText.IsBoundary(s.Text, range.Start + range.Length)) throw new InvalidDataException("Invalid rich-text range.");
++                    var style = range.Style;
++                    if (!float.IsFinite(style.FontSize) || style.FontSize < 1 || style.FontSize > 2048 || !float.IsFinite(style.LineSpacing) || style.LineSpacing <= 0 || style.LineSpacing > 10) throw new InvalidDataException("Invalid rich-text style.");
++                    rangeEnd = range.Start + range.Length;
++                }
+diff --git a/src/PresentationSpace.Core/RichText.cs b/src/PresentationSpace.Core/RichText.cs
+new file mode 100644
+index 0000000..da22dea
+--- /dev/null
++++ b/src/PresentationSpace.Core/RichText.cs
+@@ -0,0 +1,114 @@
++using System.Collections.Immutable;
++
++namespace PresentationSpace.Core;
++
++/// <summary>Immutable UTF-16 range operations. Plain Text remains the canonical string.</summary>
++public static class RichText
++{
++    public static bool IsBoundary(string text, int index) => index >= 0 && index <= text.Length &&
++        (index == 0 || index == text.Length || !(char.IsHighSurrogate(text[index - 1]) && char.IsLowSurrogate(text[index])));
++
++    public static TextStyle StyleAt(SlideShape shape, int index)
++    {
++        foreach (var range in shape.TextRanges)
++            if (index >= range.Start && index < range.Start + range.Length) return range.Style;
++        return shape.TextStyle;
++    }
++
++    public static IEnumerable<TextRangeStyle> Segments(SlideShape shape, int start, int length)
++    {
++        if (start < 0 || length < 0 || start > shape.Text.Length - length) throw new ArgumentOutOfRangeException(nameof(start));
++        int end = start + length, position = start;
++        foreach (var range in shape.TextRanges)
++        {
++            if (range.Start + range.Length <= position) continue;
++            if (range.Start >= end) break;
++            if (range.Start > position) { yield return new(position, Math.Min(end, range.Start) - position, shape.TextStyle); position = range.Start; }
++            int stop = Math.Min(end, range.Start + range.Length);
++            if (stop > position) { yield return new(position, stop - position, range.Style); position = stop; }
++        }
++        if (position < end) yield return new(position, end - position, shape.TextStyle);
++    }
++
++    public static SlideShape Format(SlideShape shape, int start, int length, Func<TextStyle, TextStyle> format)
++    {
++        ArgumentNullException.ThrowIfNull(format);
++        if (start < 0 || length < 0 || start > shape.Text.Length - length || !IsBoundary(shape.Text, start) || !IsBoundary(shape.Text, start + length)) throw new ArgumentOutOfRangeException(nameof(start));
++        if (length == 0) return shape;
++        var pieces = Segments(shape, 0, start)
++            .Concat(Segments(shape, start, length).Select(r => r with { Style = format(r.Style) }))
++            .Concat(Segments(shape, start + length, shape.Text.Length - start - length));
++        return shape with { TextRanges = Compact(pieces, shape.TextStyle) };
++    }
++
++    public static SlideShape Replace(SlideShape shape, int start, int length, string replacement)
++    {
++        ArgumentNullException.ThrowIfNull(replacement);
++        if (start < 0 || length < 0 || start > shape.Text.Length - length || !IsBoundary(shape.Text, start) || !IsBoundary(shape.Text, start + length)) throw new ArgumentOutOfRangeException(nameof(start));
++        int delta = replacement.Length - length;
++        var parts = Segments(shape, 0, start).ToList();
++        if (replacement.Length > 0) parts.Add(new(start, replacement.Length, StyleAt(shape, start < shape.Text.Length ? start : Math.Max(0, start - 1))));
++        parts.AddRange(Segments(shape, start + length, shape.Text.Length - start - length).Select(r => r with { Start = r.Start + delta }));
++        return shape with { Text = shape.Text.Remove(start, length).Insert(start, replacement), TextRanges = Compact(parts, shape.TextStyle) };
++    }
++
++    private static ImmutableArray<TextRangeStyle> Compact(IEnumerable<TextRangeStyle> parts, TextStyle fallback)
++    {
++        var result = new List<TextRangeStyle>();
++        foreach (var part in parts)
++        {
++            if (part.Length <= 0 || part.Style == fallback) continue;
++            if (result.Count > 0 && result[^1].Start + result[^1].Length == part.Start && result[^1].Style == part.Style)
++                result[^1] = result[^1] with { Length = result[^1].Length + part.Length };
++            else result.Add(part);
++        }
++        return result.ToImmutableArray();
++    }
++
++    // Existing controls edit flat text or a shape's base style. Carry explicit ranges through those changes.
++    public static SlideShape Reconcile(SlideShape before, SlideShape after)
++    {
++        if (before.TextRanges.IsEmpty || before.TextRanges != after.TextRanges) return after;
++        var adjusted = before;
++        if (before.Text != after.Text)
++        {
++            int prefix = 0;
++            while (prefix < before.Text.Length && prefix < after.Text.Length && before.Text[prefix] == after.Text[prefix]) prefix++;
++            while (!IsBoundary(before.Text, prefix) || !IsBoundary(after.Text, prefix)) prefix--;
++            int suffix = 0;
++            while (suffix < before.Text.Length - prefix && suffix < after.Text.Length - prefix && before.Text[^(suffix + 1)] == after.Text[^(suffix + 1)]) suffix++;
++            while (!IsBoundary(before.Text, before.Text.Length - suffix) || !IsBoundary(after.Text, after.Text.Length - suffix)) suffix--;
++            adjusted = Replace(before, prefix, before.Text.Length - prefix - suffix, after.Text.Substring(prefix, after.Text.Length - prefix - suffix));
++        }
++        var ranges = adjusted.TextRanges;
++        if (before.TextStyle != after.TextStyle)
++            ranges = ranges.Select(r => r with { Style = ApplyStyleChanges(r.Style, before.TextStyle, after.TextStyle) }).ToImmutableArray();
++        return after with { TextRanges = Compact(ranges, after.TextStyle) };
++    }
++
++    private static TextStyle ApplyStyleChanges(TextStyle style, TextStyle old, TextStyle value) => style with
++    {
++        FontFamily = old.FontFamily == value.FontFamily ? style.FontFamily : value.FontFamily,
++        FontSize = old.FontSize == value.FontSize ? style.FontSize : value.FontSize,
++        Bold = old.Bold == value.Bold ? style.Bold : value.Bold,
++        Italic = old.Italic == value.Italic ? style.Italic : value.Italic,
++        Underline = old.Underline == value.Underline ? style.Underline : value.Underline,
++        Color = old.Color == value.Color ? style.Color : value.Color,
++        Bullets = old.Bullets == value.Bullets ? style.Bullets : value.Bullets,
++        Alignment = old.Alignment == value.Alignment ? style.Alignment : value.Alignment,
++        VerticalAlignment = old.VerticalAlignment == value.VerticalAlignment ? style.VerticalAlignment : value.VerticalAlignment,
++        LineSpacing = old.LineSpacing == value.LineSpacing ? style.LineSpacing : value.LineSpacing
++    };
++
++    public static PresentationDocument Reconcile(PresentationDocument before, PresentationDocument after)
++    {
++        if (ReferenceEquals(before, after) || before.Slides == after.Slides) return after;
++        var previousSlides = before.Slides.ToDictionary(s => s.Id);
++        return after with { Slides = after.Slides.Select(slide =>
++        {
++            if (!previousSlides.TryGetValue(slide.Id, out var previous) || previous.Shapes == slide.Shapes) return slide;
++            var shapes = previous.Shapes.ToDictionary(s => s.Id);
++            return slide with { Shapes = slide.Shapes.Select(shape => shapes.TryGetValue(shape.Id, out var old) ? Reconcile(old, shape) : shape).ToImmutableArray() };
++        }).ToImmutableArray() };
++    }
++}
+diff --git a/src/PresentationSpace.Core/SlideFactory.cs b/src/PresentationSpace.Core/SlideFactory.cs
+index 58c84be..7f91f50 100644
+--- a/src/PresentationSpace.Core/SlideFactory.cs
++++ b/src/PresentationSpace.Core/SlideFactory.cs
+@@ -10 +10 @@ public static class SlideFactory
+-        return new() { Name = layout, Shapes = layout switch {
++        var slide = new Slide { Name = layout, LayoutName = layout, Shapes = layout switch {
+@@ -15,0 +16,5 @@ public static class SlideFactory
++        return slide with { Shapes = slide.Shapes.Select((shape, index) => shape with
++        {
++            Placeholder = index == 0 ? PlaceholderKind.Title : layout == "Title slide" ? PlaceholderKind.Subtitle : PlaceholderKind.Body,
++            PlaceholderIndex = index
++        }).ToImmutableArray() };
+diff --git a/src/PresentationSpace.Core/SlideLayoutEngine.cs b/src/PresentationSpace.Core/SlideLayoutEngine.cs
+new file mode 100644
+index 0000000..1a8dac1
+--- /dev/null
++++ b/src/PresentationSpace.Core/SlideLayoutEngine.cs
+@@ -0,0 +1,57 @@
++using System.Collections.Immutable;
++
++namespace PresentationSpace.Core;
++
++/// <summary>Maps placeholder content without removing unmatched content or custom artwork.</summary>
++public static class SlideLayoutEngine
++{
++    public static readonly ImmutableArray<string> Layouts = ["Blank", "Title slide", "Title and content", "Two content", "Title only"];
++
++    public static Slide Apply(Slide slide, string layout, float width, float height)
++    {
++        if (!Layouts.Contains(layout)) throw new ArgumentException("Unknown slide layout.", nameof(layout));
++        var source = RecognizeLegacyPlaceholders(slide, width, height);
++        var targets = SlideFactory.Create(layout, width, height).Shapes;
++        var available = source.Where(s => s.Placeholder != PlaceholderKind.None && !s.Locked).ToList();
++        var replacements = new Dictionary<Guid, SlideShape>();
++        var additions = new List<SlideShape>();
++        foreach (var target in targets)
++        {
++            var match = available.FirstOrDefault(s => s.Placeholder == target.Placeholder && s.PlaceholderIndex == target.PlaceholderIndex)
++                ?? available.FirstOrDefault(s => s.Placeholder == target.Placeholder)
++                ?? available.FirstOrDefault(s => IsContent(s.Placeholder) && IsContent(target.Placeholder));
++            if (match is null) { additions.Add(target); continue; }
++            available.Remove(match);
++            replacements[match.Id] = match with
++            {
++                Bounds = target.Bounds,
++                Placeholder = target.Placeholder,
++                PlaceholderIndex = target.PlaceholderIndex
++            };
++        }
++        // Preserve identity, z-order, text, styles, notes, comments, animations and every unmatched shape.
++        // An unmatched placeholder retains its role so returning from Blank can remap it later.
++        return slide with
++        {
++            LayoutName = layout,
++            Shapes = source.Select(s => replacements.GetValueOrDefault(s.Id, s)).Concat(additions).ToImmutableArray()
++        };
++    }
++
++    private static bool IsContent(PlaceholderKind kind) => kind is PlaceholderKind.Body or PlaceholderKind.Subtitle or PlaceholderKind.Object;
++
++    private static ImmutableArray<SlideShape> RecognizeLegacyPlaceholders(Slide slide, float width, float height)
++    {
++        if (slide.Shapes.Any(s => s.Placeholder != PlaceholderKind.None)) return slide.Shapes;
++        string? name = slide.LayoutName ?? (Layouts.Contains(slide.Name) ? slide.Name : null);
++        if (name is null) return slide.Shapes; // Never guess from text or swallow a user's text box.
++        var template = SlideFactory.Create(name, width, height);
++        return slide.Shapes.Select(shape =>
++        {
++            var match = template.Shapes.FirstOrDefault(t => t.Kind == shape.Kind && t.Bounds == shape.Bounds);
++            return match is null ? shape : shape with { Placeholder = match.Placeholder, PlaceholderIndex = match.PlaceholderIndex };
++        }).ToImmutableArray();
++    }
++
++    public static void ApplyLayout(this EditorSession session, string layout) => session.EditSlide("Slide layout", slide => Apply(slide, layout, session.Document.Width, session.Document.Height));
++}

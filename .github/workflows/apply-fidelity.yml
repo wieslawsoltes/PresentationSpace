@@ -1,0 +1,39 @@
+name: Apply fidelity implementation
+on:
+  push:
+    branches: [work/powerpoint-fidelity-0.2]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: startsWith(github.event.head_commit.message, 'build: apply fidelity implementation')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: Apply exact-baseline implementation
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 8d9e11d0d83771abcbfae98f4622e6bccc1a1a4d
+          git apply --check --unidiff-zero .ci-fidelity/*.patch
+          git apply --unidiff-zero .ci-fidelity/*.patch
+          python3 .ci-fidelity/apply-formats.py
+          python3 .ci-fidelity/apply-ui.py
+          rm .ci-fidelity/*
+          rmdir .ci-fidelity
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: preserve layouts and rich text, export native tables and chart workbooks"
+          git push origin HEAD:work/powerpoint-fidelity-0.2
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Validate implementation
+        run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release --logger trx --results-directory artifacts/test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fidelity-test-results
+          path: artifacts/test-results
