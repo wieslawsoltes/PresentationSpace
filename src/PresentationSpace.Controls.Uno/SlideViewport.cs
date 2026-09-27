@@ -56,6 +56,7 @@ public sealed partial class SlideViewport : UserControl
         _surface.DoubleTapped += OnDoubleTapped;
         _surface.PointerWheelChanged += Wheel;
         _surface.RightTapped += (_, e) => { SelectionContextRequested?.Invoke(this, EventArgs.Empty); e.Handled = true; };
+        GotFocus += RestoreNativeCanvasFocus;
         PreviewKeyDown += HandleTablePreviewKey;
         KeyDown += OnKeyDown;
         SizeChanged += (_, _) => { CommitText(); Refresh(); };

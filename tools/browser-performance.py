@@ -34,7 +34,7 @@ with sync_playwright() as p:
         page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'TEXTAREA'", timeout=20000)
     def capture_state(name):
         page.screenshot(path=str(out / (name + '.png')), full_page=True)
-        (out / (name + '.json')).write_text(json.dumps(page.evaluate("() => ({attributes:Object.fromEntries([...document.documentElement.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])), input:{tag:document.activeElement?.tagName,value:document.activeElement?.value}})"), indent=2))
+        (out / (name + '.json')).write_text(json.dumps(page.evaluate("() => ({attributes:Object.fromEntries([...document.documentElement.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])), input:{id:document.activeElement?.id,tag:document.activeElement?.tagName,value:document.activeElement?.value}})"), indent=2))
     context, page = start()
     try:
         attr('data-canvas-backend', 'SKCanvasElement')
