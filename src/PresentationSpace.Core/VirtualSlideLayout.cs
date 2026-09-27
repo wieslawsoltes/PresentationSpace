@@ -11,7 +11,7 @@ public readonly record struct VirtualSlideLayout(int Count, int Columns, double 
         if (count < 0 || count > 2000 || !double.IsFinite(viewportWidth) || !double.IsFinite(aspectRatio) || aspectRatio <= 0)
             throw new ArgumentOutOfRangeException(nameof(count));
         double available = Math.Max(96, viewportWidth - 16);
-        int columns = grid ? Math.Max(1, (int)Math.Floor((available + 12) / 288)) : 1;
+        int columns = grid ? (int)Math.Clamp(Math.Floor((available + 12) / 288), 1, 2000) : 1;
         double width = grid ? Math.Min(276, (available - (columns - 1) * 12) / columns) : available;
         return new(count, columns, width, Math.Max(40, (width - 28) * aspectRatio) + 36);
     }
@@ -22,7 +22,7 @@ public readonly record struct VirtualSlideLayout(int Count, int Columns, double 
         if (Count == 0 || height <= 0) return (0, 0);
         int first = (int)Math.Clamp(Math.Floor(Math.Max(0, offset) / Pitch), 0, Rows - 1);
         int last = (int)Math.Clamp(Math.Ceiling((Math.Max(0, offset) + height) / Pitch), first + 1, Rows);
-        return (Math.Max(0, first - overscanRows) * Columns, Math.Min(Count, (Math.Min(Rows, last + overscanRows)) * Columns));
+        return (Math.Max(0, first - overscanRows) * Columns, Math.Min(Count, (last + Math.Min(Rows - last, overscanRows)) * Columns));
     }
     public double Top(int index) => index / Columns * Pitch;
     public double Left(int index) => 8 + index % Columns * (ItemWidth + Gap);

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Use the same fully optimized JIT tier in both processes; avoid tier-promotion timing bias.
+export DOTNET_TieredCompilation=0
 baseline=8d1de0fdd59fbc96ee6718723ac9b6e9e9f4088a
 root="$PWD"
 tmp="${RUNNER_TEMP:-/tmp}/presentationspace-benchmark-$$"
@@ -14,7 +16,7 @@ import json
 from pathlib import Path
 root=Path('artifacts/performance')
 before=json.loads((root/'baseline.json').read_text()); after=json.loads((root/'current.json').read_text())
-lines=['# Same-runner CPU/raster benchmark', '', 'Baseline: `8d1de0f` (0.4). Same driver and .NET runtime; warm-up excluded. These are synthetic CPU/raster measurements, not browser FPS or physical-GPU timings.', '', '| Workload | Baseline median ms | Current median ms | Speed ratio | Baseline bytes/op | Current bytes/op |', '|---|---:|---:|---:|---:|---:|']
+lines=['# Same-runner CPU/raster benchmark', '', 'Baseline: `8d1de0f` (0.4). Same driver and .NET runtime; tiered compilation disabled in both processes; warm-up excluded. These are synthetic CPU/raster measurements, not browser FPS or physical-GPU timings.', '', '| Workload | Baseline median ms | Current median ms | Speed ratio | Baseline bytes/op | Current bytes/op |', '|---|---:|---:|---:|---:|---:|']
 for a,b in zip(before['results'],after['results']):
  assert a['name']==b['name']
  ratio=a['medianMilliseconds']/max(.000001,b['medianMilliseconds'])

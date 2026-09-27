@@ -4,6 +4,8 @@ namespace PresentationSpace.Editor.Uno;
 
 public sealed partial class PresentationEditor
 {
+    public int AllocatedFilmstripTiles => _filmstrip.AllocatedTileCount;
+    public int AllocatedSorterTiles => _sorter.AllocatedTileCount;
     public int RealizedFilmstripTiles => _filmstrip.RealizedCount;
     public int RealizedSorterTiles => _sorter.RealizedCount;
     private void BuildPerformanceCommands()

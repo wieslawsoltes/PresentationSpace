@@ -77,10 +77,21 @@ public sealed class PerformanceAndCanvasTests
         using var surface = SKSurface.Create(new SKImageInfo(640, 360)); surface.Canvas.Clear(SKColors.Transparent);
         renderer.Render(surface.Canvas, d, slide ?? d.Slides[0]); using var image = surface.Snapshot(); using var data = image.Encode(SKEncodedImageFormat.Png, 100); return data.ToArray();
     }
+    private static void AssertSamePixels(byte[] expected, byte[] actual)
+    {
+        if (!expected.SequenceEqual(actual))
+        {
+            string directory = Environment.GetEnvironmentVariable("RENDER_DIAGNOSTICS") ?? Path.Combine(Path.GetTempPath(), "presentationspace-render-diagnostics");
+            Directory.CreateDirectory(directory);
+            File.WriteAllBytes(Path.Combine(directory, "expected.png"), expected);
+            File.WriteAllBytes(Path.Combine(directory, "actual.png"), actual);
+        }
+        Assert.Equal(expected, actual);
+    }
     [Fact] public void RetainedAndUncachedPixelsMatch()
     {
         var d = Scene(); using var cached = new SlideRenderer(); using var plain = new SlideRenderer { EnablePictureCache = false };
-        Assert.Equal(Pixels(plain, d), Pixels(cached, d)); Assert.Equal(Pixels(plain, d), Pixels(cached, d)); Assert.True(cached.CacheStatistics.SceneHits > 0);
+        AssertSamePixels(Pixels(plain, d), Pixels(cached, d)); AssertSamePixels(Pixels(plain, d), Pixels(cached, d)); Assert.True(cached.CacheStatistics.SceneHits > 0);
     }
     [Fact] public void NotesAndSelectionDoNotRebuildScene()
     {
@@ -92,7 +103,7 @@ public sealed class PerformanceAndCanvasTests
         var d = Scene(); using var r = new SlideRenderer { EnableSceneCache = false }; Pixels(r, d); var before = r.CacheStatistics;
         var slide = d.Slides[0]; slide = slide with { Shapes = slide.Shapes.SetItem(0, slide.Shapes[0] with { Bounds = slide.Shapes[0].Bounds with { X = 30 } }) };
         Pixels(r, d, slide); Assert.Equal(before.Misses, r.CacheStatistics.Misses); Assert.True(r.CacheStatistics.Hits > before.Hits);
-        using var plain = new SlideRenderer { EnablePictureCache = false }; Assert.Equal(Pixels(plain, d, slide), Pixels(r, d, slide));
+        using var plain = new SlideRenderer { EnablePictureCache = false }; AssertSamePixels(Pixels(plain, d, slide), Pixels(r, d, slide));
     }
     [Fact] public void TextEditInvalidatesOnlyOnePicture()
     {
@@ -131,5 +142,25 @@ public sealed class PerformanceAndCanvasTests
         using var r = new SlideRenderer(); var table = TableModel.SetText(TableModel.Create(2, 1), 0, 0, string.Join(" ", Enumerable.Repeat("wrapping", 25)));
         Assert.True(r.AutoFitTableRows(table, 180).Height > r.AutoFitTableRows(table, 600).Height);
         var larger = table with { TextStyle = table.TextStyle with { FontSize = 40 } }; Assert.True(r.AutoFitTableRows(larger, 600).Height > r.AutoFitTableRows(table, 600).Height);
+    }
+    [Fact] public void ExtremeOverscanIsBoundedToTheDeck()
+    {
+        var layout = VirtualSlideLayout.Create(2000, 1200, .5625, true);
+        Assert.Equal((0, 2000), layout.VisibleRange(1000, 800, int.MaxValue));
+    }
+    [Fact] public void DisablingCachesDropsRetainedPictures()
+    {
+        var d = Scene(); using var r = new SlideRenderer(); Pixels(r, d);
+        Assert.True(r.CacheStatistics.Pictures > 0);
+        r.EnablePictureCache = false; Pixels(r, d);
+        Assert.Equal(0, r.CacheStatistics.Pictures); Assert.Equal(0, r.CacheStatistics.ApproximateBytes);
+    }
+    [Fact] public void ReducingThePictureLimitAlsoReleasesOversizedScene()
+    {
+        var d = Scene(); using var r = new SlideRenderer(); Pixels(r, d); Pixels(r, d);
+        long sceneHits = r.CacheStatistics.SceneHits;
+        r.MaximumCachedPictures = 1; Pixels(r, d);
+        Assert.Equal(sceneHits, r.CacheStatistics.SceneHits);
+        Assert.InRange(r.CacheStatistics.Pictures, 0, 1);
     }
 }

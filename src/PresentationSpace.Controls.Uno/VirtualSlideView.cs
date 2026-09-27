@@ -106,6 +106,7 @@ public class VirtualSlideView : SessionControl
         var content = new StackPanel { Spacing = 4 }; content.Children.Add(frame); content.Children.Add(label);
         var button = new Button { Content = content, Padding = new(8, 2, 8, 2), BorderThickness = new(0), Background = OfficePalette.Brush("00FFFFFF"), AllowDrop = true, CanDrag = true, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         var tile = new Tile(preview, button, frame, label);
+        button.KeyDown += Navigate;
         button.Click += (_, _) => { Session?.SelectSlide(tile.Index); if (!IsGrid) SlideInvoked?.Invoke(this, EventArgs.Empty); };
         button.DoubleTapped += (_, e) => { Session?.SelectSlide(tile.Index); SlideInvoked?.Invoke(this, EventArgs.Empty); e.Handled = true; };
         button.DragStarting += (_, e) => { e.Data.SetText("presentationspace-slide:" + tile.Id); e.Data.RequestedOperation = DataPackageOperation.Move; };

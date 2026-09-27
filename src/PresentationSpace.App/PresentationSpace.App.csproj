@@ -4,7 +4,7 @@
     <TargetFrameworks Condition="'$(PresentationTargetFrameworks)' != ''">$(PresentationTargetFrameworks)</TargetFrameworks>
     <OutputType>Exe</OutputType><UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures>
     <ApplicationTitle>PresentationSpace</ApplicationTitle><ApplicationId>com.wieslawsoltes.presentationspace</ApplicationId>
-    <ApplicationDisplayVersion>0.4.0</ApplicationDisplayVersion><ApplicationVersion>3</ApplicationVersion>
+    <ApplicationDisplayVersion>0.5.0</ApplicationDisplayVersion><ApplicationVersion>3</ApplicationVersion>
     <Description>Independent Office-style presentation editor built with Uno Platform and SkiaSharp.</Description>
     <IsPackable>false</IsPackable><IsUiAutomationMappingEnabled>true</IsUiAutomationMappingEnabled>
     <WasmShellMonoRuntimeExecutionMode>Interpreter</WasmShellMonoRuntimeExecutionMode><WasmShellEnableThreading>false</WasmShellEnableThreading>

@@ -8,7 +8,7 @@ public sealed partial class PresentationEditor
 {
     private void BuildTableCommands()
     {
-        _commands.Add(("Edit table cell on slide", () => { HideInspector(); Viewport.EditTableCell(); }));
+        _commands.Add(("Edit table cell on slide", () => { HideInspector(); DispatcherQueue.TryEnqueue(Viewport.EditTableCell); }));
         _commands.Add(("Auto-fit table rows", () => { Viewport.AutoFitTableRows(); Viewport.Focus(FocusState.Programmatic); }));
         void Add(string title, Action<TableDataEditor> execute, bool focusText = false) => _commands.Add((title, () =>
         {
