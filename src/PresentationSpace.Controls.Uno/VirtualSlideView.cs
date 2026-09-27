@@ -23,7 +23,7 @@ public class VirtualSlideView : SessionControl
         public Guid Id;
     }
     private readonly ScrollViewer _scroll = new() { HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-    private readonly Canvas _items = new() { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly Canvas _items = new() { VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly Dictionary<int, Tile> _realized = [];
     private readonly Stack<Tile> _pool = new();
     private readonly SlideRenderer _renderer = new() { EnableSceneCache = false, PictureCacheBudget = 8 * 1024 * 1024 };
@@ -39,7 +39,7 @@ public class VirtualSlideView : SessionControl
     {
         IsGrid = grid; IsTabStop = true;
         Background = OfficePalette.Brush(grid ? "E9E9E9" : "F6F6F6");
-        _scroll.VerticalContentAlignment = VerticalAlignment.Top;
+        _scroll.VerticalContentAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top;
         _scroll.HorizontalContentAlignment = HorizontalAlignment.Left;
         _scroll.Content = _items; Content = _scroll;
         AutomationProperties.SetName(this, grid ? "Slide sorter" : "Slide thumbnails");
