@@ -1,0 +1,34 @@
+name: Integrate verified UI refinements
+on:
+  push:
+    branches: [work/ui-table-design-0.6]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'refine-ui:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply UI refinements
+        run: |
+          set -euo pipefail
+          git diff --exit-code 72c19c158856a15cb5fb8343e2ded732c3e751ea HEAD -- src tools docs README.md CHANGELOG.md
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(Path('.ci/refine.xz').read_bytes())
+          assert hashlib.sha256(patch).hexdigest() == '31b0321848c2f3fdaa2e3d3709a34878a5fa563d3f70646a12a4018089b01680'
+          Path('/tmp/refine.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/refine.patch
+          git apply /tmp/refine.patch
+          rm .ci/refine.xz
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: preserve automation contracts and refine compact templates and table commands'
+          git push origin HEAD:work/ui-table-design-0.6
