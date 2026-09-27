@@ -168,6 +168,18 @@ public sealed partial class SlideViewport
         int target = Math.Clamp(index + delta, 0, ordered.Length - 1);
         SelectTableCell(ordered[target].Row, ordered[target].Column);
     }
+    private void HandleTablePreviewKey(object sender, KeyRoutedEventArgs e)
+    {
+        // Tab belongs to the selected table, not the surrounding XAML focus traversal.
+        // Handle it before a native text control or focus manager consumes the key.
+        if (e.Handled || e.Key != VirtualKey.Tab || Key(VirtualKey.Control) || ActiveTable is null) return;
+        e.Handled = true;
+        bool editing = _cellEditor is not null;
+        CommitCellText();
+        MoveTableCell(Key(VirtualKey.Shift) ? -1 : 1);
+        if (editing) EditTableCell();
+        else Focus(FocusState.Programmatic);
+    }
     private bool HandleTableKey(KeyRoutedEventArgs e)
     {
         if (_cellEditor is not null) return true;

@@ -83,7 +83,7 @@ with sync_playwright() as p:
         page.wait_for_function('(h) => Number(document.documentElement.getAttribute("data-primary-height")) > h', arg=height)
         fitted = value('data-primary-height')
         page.keyboard.press('Control+z')
-        assert abs(float(value('data-primary-height')) - height) < .01
+        page.wait_for_function('(h) => Math.abs(Number(document.documentElement.getAttribute("data-primary-height")) - h) < .01', arg=height)
         page.keyboard.press('Control+y')
         attr('data-primary-height', fitted)
         capture_state('table-canvas-autofit')

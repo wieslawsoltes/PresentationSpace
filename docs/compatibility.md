@@ -1,6 +1,6 @@
 # Compatibility and limitations
 
-PresentationSpace 0.4 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
+PresentationSpace 0.5 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
 
 ## Format matrix
 
@@ -44,7 +44,7 @@ Native export writes correct DrawingML physical cells and continuation flags; im
 
 Referenced Office table styles and per-master theme effects are not fully resolved. Diagonal/compound/custom borders, picture/gradient/pattern fills, cell 3D effects, rotated/vertical cell text, formula/data links and Office-identical border/text-layout precedence are not implemented. Shared border conflicts use deterministic wider-border precedence. Explicit imported fills are retained, so toggling banding/header options does not replace a cell's direct formatting; reset cell formatting to use table defaults.
 
-The Uno table editor has a paged cell navigator, not a full Excel-style grid or direct slide-cell rich editor. Text input is a plain TextBox; **apply before changing selection or closing the pane**. Other table actions include the current valid text draft, but unapplied text is not recovery state. Character formatting from this pane applies to whole selected cells; imported/model-authored mixed ranges are preserved. Cell margins can be set uniformly in the pane or individually through the model. Structured tables serialize as schema 3; schemas 1 and 2 remain readable, and older builds deliberately reject schema 3.
+The Uno table pane has a paged cell navigator, not a full Excel-style grid. Direct on-slide cell selection and entry are also available by double-clicking a cell or through command search. Pane text input is a plain TextBox; **apply before changing selection or closing the pane**. The separate on-slide overlay commits on focus loss or Ctrl+Enter, cancels its current draft on Escape, and participates in the viewport save/export/recovery flush. Other table actions include the current valid text draft, but unapplied text is not recovery state. Character formatting from this pane applies to whole selected cells; imported/model-authored mixed ranges are preserved. Cell margins can be set uniformly in the pane or individually through the model. Structured tables serialize as schema 3; schemas 1 and 2 remain readable, and older builds deliberately reject schema 3.
 
 Native chart export creates chart relationships, typed caches and an embedded workbook for column, horizontal bar, line, area, pie and doughnut charts. Column/bar grouping supports clustered, stacked and 100% stacked. Other chart types use standard grouping. Positive and negative ordinary stacks accumulate separately. Pie/doughnut charts require one series; those types and 100% stacked charts require non-negative data. Unsupported conversions fail visibly without discarding series.
 
@@ -69,3 +69,9 @@ Slide-show mode fills the application viewport, not a second-display presenter c
 Native/PPTX input: 64 MB. PPTX expansion: 128 MB total, 32 MB per part and 10,000 parts. Native documents: 2,000 slides and 20,000 shapes. Charts: 32 series, 10,000 categories, 100,000 numeric positions, validated before numeric-array allocation; TSV input at most 2,097,152 characters with 32,767-character cells. Raster decode: 16 megapixels; image insertion: 20 MB. PNG export: at most 32 megapixels. DTDs and external retrieval are prohibited. Invalid/duplicate identifiers, non-finite geometry and malformed rich-text ranges are rejected.
 
 These are defensive limits, not performance guarantees. Headless tests cover data preservation, native chart/workbook/table schemas, rendering and geometry. Browser tests use actual keyboard input against the published Uno app. CI also compiles desktop targets; compilation is not equivalent to native interactive UI testing. Large-document performance, every browser/platform, touch-only operation, assistive technologies and PowerPoint-native visual/round-trip qualification need broader testing.
+
+## 0.5 performance and table-input additions
+
+Direct on-slide table-cell entry, keyboard/range navigation, character formatting and explicit content-driven row auto-fit are implemented. The navigator remains available; direct input is a plain native TextBox overlay, not fully styled input. Row fit follows PresentationSpace's shared text metrics, not complete Office typography.
+
+Filmstrip/sorter realization is viewport-bounded, rendering uses the Uno Skia compositor with bounded retained pictures, and one-slide edits avoid whole-deck reconciliation. Synthetic benchmark and browser stress-test methodology is in [Performance](performance.md). These changes are not full large-document, hardware-GPU, startup, mobile/touch or accessibility qualification. Full master/theme inheritance, complex shaping, SmartArt/media, Office timing trees, advanced charts, secure coauthoring and lossless unsupported PPTX preservation remain unfinished.
