@@ -1,0 +1,34 @@
+name: Integrate UI and table-design implementation
+on:
+  push:
+    branches: [work/ui-table-design-0.6]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'integrate-ui:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply checksum-verified implementation
+        run: |
+          set -euo pipefail
+          git diff --exit-code 74334f0e23865d62e506093b9929d4e29e0a9175 HEAD -- src tests tools .gitignore .github/workflows/pages.yml Directory.Build.props
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(b''.join(Path(f'.ci/ui.{i}').read_bytes() for i in range(4)))
+          assert hashlib.sha256(patch).hexdigest() == 'a22fddfddd9c801d4fdcc2c8089150a0d8d1c4fcb093d444a3aaf49611c25237'
+          Path('/tmp/ui.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/ui.patch
+          git apply /tmp/ui.patch
+          rm .ci/ui.0 .ci/ui.1 .ci/ui.2 .ci/ui.3 .github/workflows/integrate-ui.yml
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: responsive Office chrome, table design and shared immutable grid indexing'
+          git push origin HEAD:work/ui-table-design-0.6
