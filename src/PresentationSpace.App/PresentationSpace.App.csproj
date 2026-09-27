@@ -2,15 +2,12 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
     <TargetFrameworks Condition="'$(PresentationTargetFrameworks)' != ''">$(PresentationTargetFrameworks)</TargetFrameworks>
-    <OutputType>Exe</OutputType><UnoSingleProject>true</UnoSingleProject>
-    <UnoFeatures>SkiaRenderer</UnoFeatures>
-    <ApplicationTitle>PresentationSpace</ApplicationTitle>
-    <ApplicationId>com.wieslawsoltes.presentationspace</ApplicationId>
+    <OutputType>Exe</OutputType><UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures>
+    <ApplicationTitle>PresentationSpace</ApplicationTitle><ApplicationId>com.wieslawsoltes.presentationspace</ApplicationId>
     <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion><ApplicationVersion>1</ApplicationVersion>
-    <Description>PowerPoint-style presentation editor built with Uno Platform and SkiaSharp.</Description>
+    <Description>Independent Office-style presentation editor built with Uno Platform and SkiaSharp.</Description>
     <IsPackable>false</IsPackable><IsUiAutomationMappingEnabled>true</IsUiAutomationMappingEnabled>
-    <WasmShellMonoRuntimeExecutionMode>Interpreter</WasmShellMonoRuntimeExecutionMode>
-    <WasmShellEnableThreading>false</WasmShellEnableThreading>
+    <WasmShellMonoRuntimeExecutionMode>Interpreter</WasmShellMonoRuntimeExecutionMode><WasmShellEnableThreading>false</WasmShellEnableThreading>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../PresentationSpace.Controls.Uno/PresentationSpace.Controls.Uno.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../PresentationSpace.Editor.Uno/PresentationSpace.Editor.Uno.csproj" /></ItemGroup>
 </Project>

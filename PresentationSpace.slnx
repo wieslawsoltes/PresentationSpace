@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/PresentationSpace.Core/PresentationSpace.Core.csproj" />
+    <Project Path="src/PresentationSpace.Formats/PresentationSpace.Formats.csproj" />
     <Project Path="src/PresentationSpace.Rendering.Skia/PresentationSpace.Rendering.Skia.csproj" />
     <Project Path="src/PresentationSpace.Ribbon.Uno/PresentationSpace.Ribbon.Uno.csproj" />
     <Project Path="src/PresentationSpace.Controls.Uno/PresentationSpace.Controls.Uno.csproj" />
+    <Project Path="src/PresentationSpace.Editor.Uno/PresentationSpace.Editor.Uno.csproj" />
     <Project Path="src/PresentationSpace.App/PresentationSpace.App.csproj" />
   </Folder>
   <Folder Name="/tests/"><Project Path="tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj" /></Folder>

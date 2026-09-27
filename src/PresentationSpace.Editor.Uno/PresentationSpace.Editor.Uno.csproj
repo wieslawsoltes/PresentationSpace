@@ -1,0 +1,12 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
+    <TargetFrameworks Condition="'$(PresentationTargetFrameworks)' != ''">$(PresentationTargetFrameworks)</TargetFrameworks>
+    <UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer</UnoFeatures><IsPackable>true</IsPackable>
+    <Description>Embeddable Office-style presentation editing workspace with pluggable storage for Uno Platform.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PresentationSpace.Controls.Uno/PresentationSpace.Controls.Uno.csproj" />
+    <ProjectReference Include="../PresentationSpace.Formats/PresentationSpace.Formats.csproj" />
+  </ItemGroup>
+</Project>
