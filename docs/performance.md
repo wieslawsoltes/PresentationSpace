@@ -22,7 +22,7 @@ Run from a full repository checkout with the .NET 10 SDK:
 bash tools/benchmark-comparison.sh
 ```
 
-The script creates a detached worktree at `8d1de0fdd59fbc96ee6718723ac9b6e9e9f4088a` (0.4), copies the exact same benchmark driver into it, and runs baseline/current sequentially on the same machine. Tiered compilation is disabled in both processes to avoid tier-promotion bias. Eight warm-up iterations are excluded; 200 editing or 80 raster iterations report median, 95th percentile, and managed bytes allocated on the executing thread. The driver covers reconciliation/nudging in a 1,000-slide, 12,000-object document and repeated/moving-object raster drawing of 300 mixed-text shapes at 1280×720.
+The script creates a detached worktree at `74334f0e23865d62e506093b9929d4e29e0a9175` (0.5), copies the exact same benchmark driver into it, and runs baseline/current sequentially on the same machine. Tiered compilation is disabled in both processes to avoid tier-promotion bias. Eight warm-up iterations are excluded; 200 editing or 80 raster iterations report median, 95th percentile, and managed bytes allocated on the executing thread. The driver covers reconciliation/nudging in a 1,000-slide, 12,000-object document and repeated/moving-object raster drawing of 300 mixed-text shapes at 1280×720. It also measures 512 deterministic cell lookups and repeated bounds changes for one 64×64-cell immutable table.
 
 Results are generated under `artifacts/performance` and uploaded by the Linux build job as `performance-comparison`. They are synthetic CPU/raster measurements, **not browser FPS, startup time, real-world Office comparison or physical-GPU frame duration**. Host load, JIT, fonts and driver/backend choices affect results; inspect raw JSON and rerun locally rather than generalizing a single speed ratio.
 
@@ -35,3 +35,16 @@ Double-click a slide cell to open native input. Enter/F2 edits a selected cell; 
 The plain input overlay does not display individual rich styles while typing. Character-range styles are retained in the document and shown by Skia after commit. Inserted text uses reconciliation rather than full Office insertion-style semantics; bidirectional shaping, IME behavior and assistive technologies need additional qualification.
 
 Auto-fit measures the same wrapped text lines used by table rendering, includes margins/borders, and distributes deficits across merged row spans. It preserves column widths, cell content and the table's rotated opposite-edge anchor. This is explicit row fitting, not continuous Office auto-layout; oversized results are rejected, and complete Office line-breaking/complex-script metrics remain unfinished.
+
+## Table indexing and measured 0.5 comparison
+
+`TableGridIndex` shares validated ownership and merge-origin reading order by immutable table identity. The first access validates the snapshot, sorts its origins and builds the index; subsequent access avoids repeated linear `CellAt` scans, validation and ownership-map construction. `TableLayout` retains independent coordinate arrays and binary-searches track boundaries. A content edit creates a new snapshot and pays the first-use cost again. Weak keys allow unreferenced snapshots and their indexes to be collected, but live undo snapshots still consume memory. These are warm-index optimizations, not a claim of constant-time new-table creation or whole-PPTX export.
+
+The initial PR implementation (`72c19c1`, Actions run `36346283055`) ran the identical driver sequentially against 0.5 and 0.6 on one Linux runner:
+
+| Warm workload | 0.5 median ms | 0.6 median ms | Managed bytes/op, before → after |
+|---|---:|---:|---:|
+| 512 lookups in a 64×64 table | 2.1029 | 0.0056 | 45,056 → 0 |
+| Layout the same 64×64 table at changing bounds | 1.5894 | 0.0008 | 1,873,260 → 736 |
+
+The four existing editing/raster workloads were essentially unchanged (speed ratios 1.00–1.04× in that run). The large ratios for table workloads reflect the intentionally repeated, already-indexed case; they must not be generalized to overall editing, cold loading, export or frame rate. All timing and native-allocation limitations above apply. Inspect the `performance-comparison` artifact and rerun on representative documents.

@@ -5,7 +5,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
 
-// This exact driver is compiled against both the immutable 0.4 baseline and the changed source in CI.
+// This exact driver is compiled against both the immutable 0.5 baseline and the changed source in CI.
 // CPU/raster benchmark, not a hardware-GPU benchmark or an end-to-end browser FPS claim.
 var results = new List<object>();
 void Measure(string name, int iterations, Action<int> work)
@@ -31,6 +31,15 @@ var scene = new Slide { Shapes = drawings }; var deck = new PresentationDocument
 using var surface = SKSurface.Create(new SKImageInfo(1280, 720)); using var renderer = new SlideRenderer();
 Measure("render-static-300-rich-text-shapes", 80, _ => renderer.Render(surface.Canvas, deck, scene));
 Measure("render-one-moving-shape-of-300", 80, i => renderer.Render(surface.Canvas, deck, scene with { Shapes = drawings.SetItem(0, drawings[0] with { Bounds = drawings[0].Bounds with { X = i % 8 } }) }));
+var table = TableModel.Create(64, 64);
+TableCell? cellSink = null;
+Measure("lookup-512-cells-in-64x64-table", 80, iteration =>
+{
+    for (int n = 0; n < 512; n++) { int slot = (n * 17 + iteration * 97) % 4096; cellSink = TableModel.CellAt(table, slot / 64, slot % 64); }
+});
+TableLayout? layoutSink = null;
+Measure("layout-64x64-table-at-changing-bounds", 80, i => layoutSink = new TableLayout(table, new(i % 10, 0, 1280, 720)));
+GC.KeepAlive(cellSink); GC.KeepAlive(layoutSink);
 GC.KeepAlive(sink);
 var report = new { runtime = Environment.Version.ToString(), os = Environment.OSVersion.ToString(), processorCount = Environment.ProcessorCount, results };
 string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });

@@ -42,6 +42,9 @@ public sealed record TableSpec
     public bool HeaderRow { get; init; } = true;
     public bool BandedRows { get; init; } = true;
     public bool TotalRow { get; init; }
+    public bool FirstColumn { get; init; }
+    public bool LastColumn { get; init; }
+    public bool BandedColumns { get; init; }
     public TextStyle TextStyle { get; init; } = new() { FontSize = 20, VerticalAlignment = VerticalAlignment.Middle };
     [JsonIgnore] public int RowCount => RowHeights.Length;
     [JsonIgnore] public int ColumnCount => ColumnWidths.Length;
@@ -85,11 +88,14 @@ public static partial class TableModel
     public static TextStyle Style(TableSpec table, TableCell cell)
     {
         if (cell.TextStyle is { } style) return style;
-        bool emphasis = table.HeaderRow && cell.Row == 0 || table.TotalRow && cell.Row + cell.RowSpan == table.RowCount;
+        bool emphasis = Emphasized(table, cell);
         return emphasis ? table.TextStyle with { Bold = true, Color = "#FFFFFF" } : table.TextStyle;
     }
+    private static bool Emphasized(TableSpec table, TableCell cell) =>
+        table.HeaderRow && cell.Row == 0 || table.TotalRow && cell.Row + cell.RowSpan == table.RowCount ||
+        table.FirstColumn && cell.Column == 0 || table.LastColumn && cell.Column + cell.ColumnSpan == table.ColumnCount;
     public static string Fill(TableSpec table, TableCell cell) => cell.Fill ??
-        (table.HeaderRow && cell.Row == 0 || table.TotalRow && cell.Row + cell.RowSpan == table.RowCount ? table.Accent : table.BandedRows && cell.Row % 2 == 0 ? table.BandFill : table.BodyFill);
+        (Emphasized(table, cell) ? table.Accent : table.BandedRows && cell.Row % 2 == 0 || table.BandedColumns && cell.Column % 2 == 0 ? table.BandFill : table.BodyFill);
     public static SlideShape TextShape(TableSpec table, TableCell cell, RectF bounds = default) => new() { Kind = ShapeKind.Text, Bounds = bounds, Text = cell.Text, TextStyle = Style(table, cell), TextRanges = cell.TextRanges };
     public static void Validate(TableSpec table)
     {
@@ -137,7 +143,7 @@ public static partial class TableModel
     public static TableCell CellAt(TableSpec table, int row, int column)
     {
         if (row < 0 || row >= table.RowCount || column < 0 || column >= table.ColumnCount) throw new ArgumentOutOfRangeException(nameof(row));
-        return table.Cells.First(c => row >= c.Row && row < c.Row + c.RowSpan && column >= c.Column && column < c.Column + c.ColumnSpan);
+        return TableGridIndex.For(table).Owner(row, column);
     }
     public static TableRange ExpandRange(TableSpec table, TableRange range)
     {
@@ -263,12 +269,12 @@ public sealed class TableLayout
     public TableSpec Table { get; }
     public float[] X { get; }
     public float[] Y { get; }
-    private readonly TableCell[] _owners;
+    private readonly TableGridIndex _index;
     public TableLayout(TableSpec table, RectF bounds)
     {
-        TableModel.Validate(table); Table = table; X = Edges(table.ColumnWidths, bounds.X, bounds.Width); Y = Edges(table.RowHeights, bounds.Y, bounds.Height);
-        _owners = new TableCell[table.RowCount * table.ColumnCount];
-        foreach (var cell in table.Cells) for (int r = cell.Row; r < cell.Row + cell.RowSpan; r++) for (int c = cell.Column; c < cell.Column + cell.ColumnSpan; c++) _owners[r * table.ColumnCount + c] = cell;
+        if (!float.IsFinite(bounds.X) || !float.IsFinite(bounds.Y) || !float.IsFinite(bounds.Width) || !float.IsFinite(bounds.Height) || !float.IsFinite(bounds.Right) || !float.IsFinite(bounds.Bottom) || bounds.Width <= 0 || bounds.Height <= 0) throw new ArgumentOutOfRangeException(nameof(bounds));
+        _index = TableGridIndex.For(table); Table = table;
+        X = Edges(table.ColumnWidths, bounds.X, bounds.Width); Y = Edges(table.RowHeights, bounds.Y, bounds.Height);
     }
     private static float[] Edges(ImmutableArray<float> sizes, float start, float extent)
     {
@@ -276,11 +282,16 @@ public sealed class TableLayout
         for (int i = 0; i < sizes.Length; i++) { offset += sizes[i]; edges[i + 1] = start + (float)(offset / total * extent); } return edges;
     }
     public RectF Bounds(TableCell c) => new(X[c.Column], Y[c.Row], X[c.Column + c.ColumnSpan] - X[c.Column], Y[c.Row + c.RowSpan] - Y[c.Row]);
-    public TableCell Owner(int row, int column) => _owners[row * Table.ColumnCount + column];
+    public TableCell Owner(int row, int column) => _index.Owner(row, column);
     public TableCell? HitTest(PointF point)
     {
-        if (point.X < X[0] || point.X > X[^1] || point.Y < Y[0] || point.Y > Y[^1]) return null;
-        int c = Array.FindIndex(X, edge => edge > point.X) - 1, r = Array.FindIndex(Y, edge => edge > point.Y) - 1;
-        return Owner(r < 0 ? Table.RowCount - 1 : r, c < 0 ? Table.ColumnCount - 1 : c);
+        if (!float.IsFinite(point.X) || !float.IsFinite(point.Y) || point.X < X[0] || point.X > X[^1] || point.Y < Y[0] || point.Y > Y[^1]) return null;
+        return Owner(Track(Y, point.Y), Track(X, point.X));
+    }
+    private static int Track(float[] edges, float value)
+    {
+        int low = 0, high = edges.Length;
+        while (low < high) { int middle = low + (high - low) / 2; if (edges[middle] <= value) low = middle + 1; else high = middle; }
+        return Math.Clamp(low - 1, 0, edges.Length - 2);
     }
 }

@@ -22,11 +22,11 @@ public sealed class RibbonCommandButton : Button
     public string CommandId{get;}
     public RibbonCommandButton(string id,string label,string glyph,Action action,bool large=true,string? shortcut=null)
     {
-        CommandId=id;Background=OfficePalette.Brush("00FFFFFF");BorderThickness=new(0);CornerRadius=new(4);Padding=new(7,4,7,4);MinWidth=large?52:28;Height=large?76:27;Foreground=OfficePalette.Ink;
+        CommandId=id;Background=OfficePalette.Brush("00FFFFFF");BorderThickness=new(0);CornerRadius=new(4);Padding=new(7,4,7,4);MinWidth=large?52:28;MinHeight=0;Height=large?76:27;VerticalContentAlignment=VerticalAlignment.Center;Foreground=OfficePalette.Ink;
         var content=new StackPanel{Orientation=large?Orientation.Vertical:Orientation.Horizontal,Spacing=large?5:7,HorizontalAlignment=HorizontalAlignment.Center};
         content.Children.Add(new FontIcon{Glyph=glyph,FontSize=large?25:15,Foreground=OfficePalette.Accent});
         if(!string.IsNullOrEmpty(label))content.Children.Add(new TextBlock{Text=label,FontSize=11,TextAlignment=TextAlignment.Center,Foreground=OfficePalette.Ink,TextWrapping=TextWrapping.Wrap,MaxWidth=large?82:145,VerticalAlignment=VerticalAlignment.Center});
-        Content=content;AutomationProperties.SetName(this,label.Replace('\n',' '));AutomationProperties.SetAutomationId(this,id);ToolTipService.SetToolTip(this,label.Replace('\n',' ')+(shortcut is null?"":" ("+shortcut+")"));Click+=(_,_)=>action();
+        Content=content;AutomationProperties.SetName(this,string.IsNullOrWhiteSpace(label)?id:label.Replace('\n',' '));AutomationProperties.SetAutomationId(this,id);ToolTipService.SetToolTip(this,label.Replace('\n',' ')+(shortcut is null?"":" ("+shortcut+")"));Click+=(_,_)=>action();
     }
 }
 
@@ -39,7 +39,7 @@ public sealed class RibbonGroup : UserControl
         Title=title;var grid=new Grid{RowDefinitions={new(){Height=new GridLength(1,GridUnitType.Star)},new(){Height=new GridLength(18)}}};
         foreach(var item in items)Items.Children.Add(item);grid.Children.Add(Items);
         var caption=new TextBlock{Text=title,FontSize=10,Foreground=OfficePalette.Muted,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};Grid.SetRow(caption,1);grid.Children.Add(caption);
-        Content=new Border{Child=grid,BorderBrush=OfficePalette.Line,BorderThickness=new(0,0,1,0),Padding=new(7,3,8,0),Height=102};
+        Content=new Border{Child=grid,BorderBrush=OfficePalette.Line,BorderThickness=new(0,0,1,0),Padding=new(7,3,8,0),Height=108};
     }
     public static StackPanel Column(params UIElement[] items){var p=new StackPanel{Spacing=1,VerticalAlignment=VerticalAlignment.Top};foreach(var item in items)p.Children.Add(item);return p;}
 }
@@ -54,14 +54,20 @@ public sealed class RibbonControl : UserControl
     private readonly List<Button> _buttons=[];
     public string SelectedTab{get;private set;}="";
     public event EventHandler<string>? TabChanged;
+    public event EventHandler? ViewChanged;
     public bool IsCollapsed{get;private set;}
-    private readonly ScrollViewer _groupScroll;
+    private readonly RibbonScroller _groupScroll, _tabsScroll;
+    public bool GroupsOverflow => _groupScroll.HasOverflow;
+    public bool TabsOverflow => _tabsScroll.HasOverflow;
+    public double GroupScrollOffset => _groupScroll.Offset;
     public RibbonControl()
     {
         var root=new Grid{Background=OfficePalette.White,RowDefinitions={new(){Height=GridLength.Auto},new(){Height=GridLength.Auto}}};
-        var tabsScroll=new ScrollViewer{Content=_tabs,HorizontalScrollBarVisibility=ScrollBarVisibility.Hidden,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Enabled};root.Children.Add(tabsScroll);
-        _groupScroll=new(){Content=_groups,HorizontalScrollBarVisibility=ScrollBarVisibility.Hidden,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Enabled};Grid.SetRow(_groupScroll,1);root.Children.Add(_groupScroll);
+        _tabsScroll=new RibbonScroller(_tabs,"ribbon tabs");root.Children.Add(_tabsScroll);
+        _groupScroll=new RibbonScroller(_groups,"ribbon commands");Grid.SetRow(_groupScroll,1);root.Children.Add(_groupScroll);
         Content=new Border{Child=root,BorderBrush=OfficePalette.Line,BorderThickness=new(0,0,0,1)};
+        _tabsScroll.ViewChanged+=(_,_)=>ViewChanged?.Invoke(this,EventArgs.Empty);
+        _groupScroll.ViewChanged+=(_,_)=>ViewChanged?.Invoke(this,EventArgs.Empty);
     }
     public void SetTabs(IEnumerable<RibbonTab> tabs)
     {
@@ -75,9 +81,11 @@ public sealed class RibbonControl : UserControl
     }
     public void SelectTab(string title)
     {
-        var tab=_definitions.FirstOrDefault(t=>t.Title==title);if(tab is null)return;SelectedTab=title;
+        var tab=_definitions.FirstOrDefault(t=>t.Title==title);if(tab is null)return;
+        if(SelectedTab==title && _groups.Children.Count>0){_tabsScroll.Reveal(_buttons[_definitions.IndexOf(tab)]);return;}
+        SelectedTab=title;
         for(int i=0;i<_buttons.Count;i++){bool selected=_definitions[i].Title==title;_buttons[i].BorderBrush=selected?OfficePalette.Accent:OfficePalette.White;_buttons[i].Foreground=selected?OfficePalette.Accent:OfficePalette.Ink;}
-        _groups.Children.Clear();foreach(var group in tab.Build())_groups.Children.Add(group);TabChanged?.Invoke(this,title);
+        _groups.Children.Clear();foreach(var group in tab.Build())_groups.Children.Add(group);_tabsScroll.Reveal(_buttons[_definitions.IndexOf(tab)]);TabChanged?.Invoke(this,title);
     }
     public void ToggleCollapsed(){IsCollapsed=!IsCollapsed;_groupScroll.Visibility=IsCollapsed?Visibility.Collapsed:Visibility.Visible;}
 }

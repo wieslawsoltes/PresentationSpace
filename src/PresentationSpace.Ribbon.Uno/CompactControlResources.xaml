@@ -1,0 +1,52 @@
+<ResourceDictionary
+    x:Class="PresentationSpace.Ribbon.Uno.CompactControlResources"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Do not inherit theme checked backgrounds: only the capsule displays the toggle state. -->
+    <ControlTemplate x:Key="CompactToggleTemplate" TargetType="ToggleButton">
+        <Grid Background="Transparent">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="PointerOver">
+                        <VisualState.Setters>
+                            <Setter Target="CapsulePresenter.Opacity" Value="0.85" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Target="CapsulePresenter.Opacity" Value="0.7" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Disabled" />
+                    <VisualState x:Name="Checked" />
+                    <VisualState x:Name="CheckedPointerOver">
+                        <VisualState.Setters>
+                            <Setter Target="CapsulePresenter.Opacity" Value="0.85" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="CheckedPressed">
+                        <VisualState.Setters>
+                            <Setter Target="CapsulePresenter.Opacity" Value="0.7" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="CheckedDisabled" />
+                    <VisualState x:Name="Indeterminate" />
+                    <VisualState x:Name="IndeterminatePointerOver">
+                        <VisualState.Setters>
+                            <Setter Target="CapsulePresenter.Opacity" Value="0.85" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="IndeterminatePressed">
+                        <VisualState.Setters>
+                            <Setter Target="CapsulePresenter.Opacity" Value="0.7" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="IndeterminateDisabled" />
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+            <ContentPresenter x:Name="CapsulePresenter" Content="{TemplateBinding Content}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Grid>
+    </ControlTemplate>
+</ResourceDictionary>

@@ -107,7 +107,7 @@ public partial class PresentationJsonContext : JsonSerializerContext;
 public static class DocumentSerializer
 {
     public const int MaxFileBytes = 64 * 1024 * 1024;
-    public static string Serialize(PresentationDocument document) => JsonSerializer.Serialize(document with { SchemaVersion = Math.Max(document.SchemaVersion, document.Slides.Any(s => s.Shapes.Any(x => x.Table is not null)) ? 3 : document.Slides.Any(s => s.Shapes.Any(x => x.Chart is not null)) ? 2 : 1) }, PresentationJsonContext.Default.PresentationDocument);
+    public static string Serialize(PresentationDocument document) => JsonSerializer.Serialize(document with { SchemaVersion = Math.Max(document.SchemaVersion, document.Slides.Any(s => s.Shapes.Any(x => x.Table is { } t && (t.FirstColumn || t.LastColumn || t.BandedColumns))) ? 4 : document.Slides.Any(s => s.Shapes.Any(x => x.Table is not null)) ? 3 : document.Slides.Any(s => s.Shapes.Any(x => x.Chart is not null)) ? 2 : 1) }, PresentationJsonContext.Default.PresentationDocument);
     public static PresentationDocument Deserialize(string json)
     {
         if (json.Length > MaxFileBytes) throw new InvalidDataException("Presentation exceeds the 64 MB input limit.");
@@ -117,7 +117,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2 or 3)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3 or 4)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();

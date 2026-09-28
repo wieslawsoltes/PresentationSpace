@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — Responsive chrome and table design
+
+- Replace the clipped title-bar switch with a reusable compact, keyboard-operable toggle; center the title-bar controls and constrain long document names.
+- Correct compact ribbon/font minimum sizes, provide explicit overflow scrolling, retain command search through a compact flyout, and adapt quick actions, notes, status and inspector layout.
+- Add a Table Design ribbon, four palette presets, first/last-column emphasis, column banding and merged-aware selective border operations with shared-edge synchronization and transactional undo.
+- Persist column-style flags in native DrawingML and schema-4 native files; retain schema 1–3 reads and existing native table/chart regression gates.
+- Reuse weak-keyed immutable table ownership/reading-order indexes across layout and navigation. Cache table diagnostic statistics and coalesce shell geometry reporting.
+- Retain user-resized pane widths across adaptive layouts; handle pointer capture/cancellation and refresh changed geometry after XAML arrangement without forcing synchronous layout.
+- Extend same-runner comparisons against 0.5 with large-table lookup/layout workloads and add production-browser responsive chrome/table-design tests.
+
+
 ## 0.5.0 — accelerated canvas and direct table editing
 
 - Replace raster-backed canvas controls with direct-composited Uno `SKCanvasElement` for slide editing, previews and presentation playback.

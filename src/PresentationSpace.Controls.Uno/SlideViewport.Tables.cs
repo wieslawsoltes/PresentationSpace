@@ -166,10 +166,8 @@ public sealed partial class SlideViewport
     private void MoveTableCell(int delta)
     {
         if (ActiveTable is not { } shape || _cellSelection is not { } selection) return;
-        var table = TableModel.Get(shape); var ordered = table.Cells.OrderBy(c => c.Row).ThenBy(c => c.Column).ToArray();
-        int index = Array.FindIndex(ordered, c => c.Row == selection.Row && c.Column == selection.Column);
-        int target = Math.Clamp(index + delta, 0, ordered.Length - 1);
-        SelectTableCell(ordered[target].Row, ordered[target].Column);
+        var target = TableGridIndex.For(TableModel.Get(shape)).Move(selection.Row, selection.Column, delta);
+        SelectTableCell(target.Row, target.Column);
     }
     private void HandleTablePreviewKey(object sender, KeyRoutedEventArgs e)
     {

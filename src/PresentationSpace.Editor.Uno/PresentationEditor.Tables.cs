@@ -10,19 +10,11 @@ public sealed partial class PresentationEditor
     {
         _commands.Add(("Edit table cell on slide", () => { HideInspector(); DispatcherQueue.TryEnqueue(Viewport.EditTableCell); }));
         _commands.Add(("Auto-fit table rows", () => { Viewport.AutoFitTableRows(); Viewport.Focus(FocusState.Programmatic); }));
-        void Add(string title, Action<TableDataEditor> execute, bool focusText = false) => _commands.Add((title, () =>
+        void Add(string title, Action<TableDataEditor> execute, bool focusText = false) => _commands.Add((title, () => DesignTable(table =>
         {
-            if (Session.PrimaryShape is not { Kind: ShapeKind.Table } || Session.Selection.Count != 1) { Notice("Select one table first."); return; }
-            // Keep the current editor and its range when invoking a table command from command search.
-            if (_format.TableEditor is null) ShowInspector(InspectorMode.Format);
-            else _formatColumn.Width = new GridLength(296);
-            if (_format.TableEditor is { } table)
-            {
-                execute(table);
-                if (focusText) DispatcherQueue.TryEnqueue(table.FocusText);
-                else Viewport.Focus(FocusState.Programmatic);
-            }
-        }));
+            execute(table);
+            if (focusText) DispatcherQueue.TryEnqueue(table.FocusText);
+        }, focusText)));
         Add("Edit table data", _ => { }, true);
         Add("Table select row", t => t.SelectRow());
         Add("Table select column", t => t.SelectColumn());
@@ -33,5 +25,12 @@ public sealed partial class PresentationEditor
         Add("Insert table column", t => t.InsertColumn());
         Add("Delete table row", t => t.DeleteRow());
         Add("Delete table column", t => t.DeleteColumn());
+        foreach(var preset in Enum.GetValues<TableStylePreset>())
+            Add("Table style " + preset, t => t.ApplyTableStyle(preset));
+        foreach(var scope in Enum.GetValues<TableBorderScope>())
+            Add("Table borders " + scope, t => t.ApplyBorderScope(scope));
+        Add("Table toggle first column", t => t.ToggleFirstColumn());
+        Add("Table toggle last column", t => t.ToggleLastColumn());
+        Add("Table toggle banded columns", t => t.ToggleBandedColumns());
     }
 }
