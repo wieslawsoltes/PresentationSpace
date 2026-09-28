@@ -3,6 +3,7 @@ import io
 import json
 import os
 import time
+import traceback
 from pathlib import Path
 from PIL import Image
 from playwright.sync_api import sync_playwright
@@ -10,7 +11,7 @@ from playwright.sync_api import sync_playwright
 output = Path('artifacts/screenshots')
 output.mkdir(parents=True, exist_ok=True)
 url = os.environ.get('PRESENTATIONSPACE_URL', 'http://127.0.0.1:8080/PresentationSpace/')
-errors, console = [], []
+errors, console, failures = [], [], []
 
 with sync_playwright() as playwright:
     options = {'headless': True, 'args': ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader']}
@@ -40,6 +41,22 @@ with sync_playwright() as playwright:
         page.keyboard.type(text)
         page.keyboard.press('Enter')
         attr('data-command-version', before + 1)
+    def replace_cell_text(text):
+        # The pane focuses and selects the cell text before replacement. Wait for
+        # that native selection and for the resulting immutable document commit;
+        # a keyboard event alone does not mean coalesced diagnostics have run.
+        page.wait_for_function("""() => {
+            const input = document.activeElement;
+            return input?.id === 'uno-input' && input.tagName === 'TEXTAREA'
+                && input.selectionStart === 0 && input.selectionEnd === input.value.length;
+        }""", timeout=20000)
+        old_length = page.evaluate('document.activeElement.value.length')
+        before = int(page.locator('html').get_attribute('data-table-text-length'))
+        expected = before - old_length + len(text.encode('utf-16-le')) // 2
+        page.keyboard.insert_text(text)
+        page.keyboard.press('Control+Enter')
+        attr('data-table-text-length', expected)
+        return expected
     try:
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready' || document.documentElement.hasAttribute('data-startup-error')", timeout=120000)
@@ -136,11 +153,8 @@ with sync_playwright() as playwright:
         attr('data-table-columns', 3)
         attr('data-table-origins', 12)
         command('Edit table data')
-        page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'TEXTAREA'", timeout=20000)
-        page.keyboard.insert_text('Updated category')
-        page.keyboard.press('Control+Enter')
+        text_length = replace_cell_text('Updated category')
         # Merging preserves content in reading order, adding two paragraph separators.
-        text_length = int(page.locator('html').get_attribute('data-table-text-length'))
         command('Table select row')
         command('Merge table cells')
         attr('data-table-origins', 10)
@@ -171,9 +185,7 @@ with sync_playwright() as playwright:
         command('Merge table cells')
         attr('data-table-origins', 10)
         command('Edit table data')
-        page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'TEXTAREA'", timeout=20000)
-        page.keyboard.insert_text('Regional performance')
-        page.keyboard.press('Control+Enter')
+        replace_cell_text('Regional performance')
         attr('data-table-merged', 1)
         page.screenshot(path=str(output / 'table-styled.png'), full_page=True)
         page.keyboard.press('F5')
@@ -187,7 +199,11 @@ with sync_playwright() as playwright:
         page.screenshot(path=str(output / 'compact.png'), full_page=True)
         assert not errors, '\n'.join(errors)
         print('PASS: slideshow, exit and compact viewport.', flush=True)
+    except Exception:
+        failures.append(traceback.format_exc())
+        raise
     finally:
+        (output / 'browser-smoke.json').write_text(json.dumps({'errors': errors, 'failures': failures}, indent=2), encoding='utf-8')
         page.screenshot(path=str(output / 'final-state.png'), full_page=True)
         state = page.evaluate("() => ({attributes: Object.fromEntries([...document.documentElement.attributes].filter(a => a.name.startsWith('data-')).map(a => [a.name, a.value])), activeInput: {id: document.activeElement?.id, tag: document.activeElement?.tagName, value: document.activeElement?.value, start: document.activeElement?.selectionStart, end: document.activeElement?.selectionEnd}})")
         (output / 'state.json').write_text(json.dumps(state, indent=2), encoding='utf-8')
