@@ -60,6 +60,20 @@ with sync_playwright() as p:
         rect = chrome()[name]
         assert rect['visible'], (name, rect)
         page.mouse.click(rect['x'] + rect['width'] / 2, rect['y'] + rect['height'] / 2)
+    def drag_splitter(name, delta):
+        rect = chrome()[name]
+        assert rect['visible'] and rect['width'] > 0 and rect['height'] > 0, (name, rect)
+        x, y = rect['x'] + rect['width']/2, rect['y'] + rect['height']/2
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + delta, y, steps=8)
+        page.mouse.up()
+        settle()
+    def wait_width(name, width):
+        page.wait_for_function("""([name, width]) => {
+            const raw = document.documentElement.getAttribute('data-ui-chrome');
+            return raw && Math.abs(JSON.parse(raw)[name].width - width) <= 1;
+        }""", arg=[name, width], timeout=20000)
     def check_switch_pixels():
         # Bounds alone would miss a theme painting a rectangular checked background.
         # Sample the hit-target padding, away from the pill and the outer focus ring.
@@ -162,6 +176,24 @@ with sync_playwright() as p:
         attr('data-ribbon-tab', 'Table Design')
         page.screenshot(path=str(out / 'table-design-06.png'))
         print('PASS: table palettes, first/last/banded columns, selective borders and undo/redo through real commands.', flush=True)
+        # User-resized widths survive pane closing and responsive dock/overlay changes.
+        wait_pane(1440)
+        pane_width = chrome()['format-pane']['width']
+        drag_splitter('format-splitter', -72)
+        wait_width('format-pane', pane_width + 72)
+        command('Close format pane')
+        command('Format shape')
+        wait_width('format-pane', pane_width + 72)
+        drag_splitter('filmstrip-splitter', 40)
+        page.wait_for_function("() => JSON.parse(document.documentElement.getAttribute('data-ui-chrome'))['filmstrip-splitter'].x >= 259")
+        page.set_viewport_size({'width': 720, 'height': 500})
+        wait_layout(720, 500)
+        wait_pane(720)
+        page.set_viewport_size({'width': 1440, 'height': 1000})
+        wait_layout(1440, 1000)
+        wait_width('format-pane', pane_width + 72)
+        assert abs(chrome()['filmstrip-splitter']['x'] - 260) <= 1
+        print('PASS: captured-pointer pane resizing retains preferred widths across responsive layouts.', flush=True)
         command('Close format pane')
         page.set_viewport_size({'width': 390, 'height': 500})
         wait_layout(390, 500)

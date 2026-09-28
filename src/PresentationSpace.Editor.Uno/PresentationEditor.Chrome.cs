@@ -114,6 +114,7 @@ public sealed partial class PresentationEditor
     {
         double width = ActualWidth, height = ActualHeight;
         if (width <= 0) return;
+        InitializePanePreferences();
         void Visible(UIElement? element, bool visible) { if (element is not null) element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed; }
         Visible(_search, width >= 1180); Visible(_autoSaveLabel, width >= 520);
         Visible(_undoQuick, width >= 720); Visible(_redoQuick, width >= 720);
@@ -121,11 +122,11 @@ public sealed partial class PresentationEditor
         Visible(_saveState, width >= 840);
         if (_presentQuick is not null) { _presentQuick.Content = width < 720 ? "▷" : "▷  Present"; _presentQuick.Padding = new(width < 720 ? 7 : 11, 4, width < 720 ? 7 : 11, 4); }
         bool film = _filmstripOverride ?? width >= 640;
-        _filmColumn.Width = new GridLength(!film ? 0 : width < 820 ? 140 : Math.Clamp(_filmColumn.Width.Value, 180, 360));
+        _filmColumn.Width = new GridLength(!film ? 0 : width < 820 ? 140 : Math.Clamp(_preferredFilmstripWidth, 140, 360));
         Visible(_filmstrip, film); Visible(_leftSplitter, film);
         _workspace.ColumnDefinitions[1].Width = new GridLength(film ? 5 : 0);
         bool docked = width >= 1100 && _inspectorOpen;
-        _formatColumn.Width = new GridLength(docked ? 296 : 0);
+        _formatColumn.Width = new GridLength(docked ? Math.Clamp(_preferredFormatWidth, 260, 420) : 0);
         _workspace.ColumnDefinitions[3].Width = new GridLength(docked ? 5 : 0);
         Visible(_rightSplitter, docked); Visible(_format, _inspectorOpen);
         Grid.SetColumn(_format, docked ? 4 : 0); Grid.SetColumnSpan(_format, docked ? 1 : 5);

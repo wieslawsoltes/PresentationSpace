@@ -1,6 +1,6 @@
 # Compatibility and limitations
 
-PresentationSpace 0.5 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
+PresentationSpace 0.6 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
 
 ## Format matrix
 
@@ -78,6 +78,8 @@ Filmstrip/sorter realization is viewport-bounded, rendering uses the Uno Skia co
 
 ## 0.6 table-design and UI scope
 
-The editor adds four built-in palettes, first/last-column emphasis, column banding, and all/outside/inside/horizontal/vertical/individual-side/no-border scopes. Direct cell fills and text styles are preserved, not silently cleared by palette selection. Shared border edits update both neighbors; a selection that cuts only part of a neighboring merged side is rejected. Segment-specific merged-side borders, full Office theme table styles and all style-precedence rules remain unfinished. Native DrawingML `firstCol`, `lastCol` and `bandCol` round-trip; this does not make unsupported PPTX parts lossless.
+The editor adds four built-in palettes, first/last-column emphasis, column banding, and all/outside/inside/horizontal/vertical/individual-side/no-border scopes. Direct cell fills and text styles are preserved, not silently cleared by palette selection. Shared border edits update both neighbors; a selection that cuts only part of a neighboring merged side is rejected. Segment-specific merged-side borders, full Office theme table styles and all style-precedence rules remain unfinished. Native documents with these column flags use schema 4 (schemas 1–3 remain readable); ordinary structured tables without the new flags remain schema 3. Native DrawingML `firstCol`, `lastCol` and `bandCol` round-trip; this does not make unsupported PPTX parts lossless.
 
 Responsive shell changes cover compact title controls, constrained document titles, ribbon scrolling, search access and inspector/notes/status adaptation. This is not pixel-exact PowerPoint UI parity or a full screen-reader/touch/browser certification. Table text still uses a plain native input overlay, and local automatic recovery still retains committed document state rather than an active input draft.
+
+User-resized filmstrip and docked inspector widths are retained for the current editor instance when resizing the window or closing/reopening a pane. They are not persisted across application restarts. Browser geometry diagnostics refresh after XAML arrangement and publish only changed snapshots; model/table diagnostics are not recomputed by layout callbacks.
