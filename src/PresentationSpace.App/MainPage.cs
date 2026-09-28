@@ -4,7 +4,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Editor.Uno;
 namespace PresentationSpace.App;
 
-public sealed class MainPage : Page
+public sealed partial class MainPage : Page
 {
     private readonly PresentationEditor _editor;
     private bool _initialized, _diagnosticsQueued;
@@ -19,8 +19,11 @@ public sealed class MainPage : Page
         SizeChanged += (_, _) => QueueDiagnostics();
         _editor.Ribbon.TabChanged += (_, _) => QueueDiagnostics();
         GotFocus += (_, _) => QueueDiagnostics();
+        Unloaded += (_, _) => LayoutUpdated -= OnLayoutUpdated;
         Loaded += async (_, _) =>
         {
+            LayoutUpdated -= OnLayoutUpdated;
+            LayoutUpdated += OnLayoutUpdated;
             if (_initialized) return;
             _initialized = true;
             await _editor.RestoreRecoveryAsync();
@@ -40,8 +43,8 @@ public sealed class MainPage : Page
     private void UpdateDiagnostics()
     {
 #if __WASM__
-        string chrome = Uri.EscapeDataString(_editor.GetChromeDiagnostics());
-        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-ui-chrome',decodeURIComponent('{chrome}'));document.documentElement.setAttribute('data-autosave','{(_editor.AutoSaveEnabled ? "true" : "false")}');document.documentElement.setAttribute('data-ribbon-tab','{_editor.Ribbon.SelectedTab}');");
+        UpdateChromeDiagnostics();
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-autosave','{(_editor.AutoSaveEnabled ? "true" : "false")}');document.documentElement.setAttribute('data-ribbon-tab','{_editor.Ribbon.SelectedTab}');");
         global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-ribbon-offset','{_editor.Ribbon.GroupScrollOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)}');document.documentElement.setAttribute('data-ribbon-groups-overflow','{(_editor.Ribbon.GroupsOverflow ? "true" : "false")}');document.documentElement.setAttribute('data-ribbon-tabs-overflow','{(_editor.Ribbon.TabsOverflow ? "true" : "false")}');");
         var session = _editor.Session;
         var table = session.PrimaryShape?.Table;

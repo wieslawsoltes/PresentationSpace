@@ -32,6 +32,30 @@ with sync_playwright() as p:
         settle()
     def chrome():
         return json.loads(value('data-ui-chrome'))
+    def wait_layout(width, height):
+        # A pair of JS animation frames is not a completion fence for Uno's XAML
+        # dispatcher. Wait for the actual arranged root before inspecting children.
+        page.wait_for_function("""([width, height]) => {
+            const raw = document.documentElement.getAttribute('data-ui-chrome');
+            if (!raw) return false;
+            const layout = JSON.parse(raw), title = layout['title-bar'];
+            const status = layout['status-bar'], workspace = layout['workspace'];
+            return Math.abs(title.width - width) < 1 && Math.abs(workspace.width - width) < 1
+                && status.height > 0 && Math.abs(status.y + status.height - height) < 1;
+        }""", arg=[width, height], timeout=20000)
+        settle()
+    def wait_pane(width):
+        # Keep all clipping checks, but do not assert against the command's
+        # pre-arrange snapshot (visible=true with zero size and the old position).
+        page.wait_for_function("""width => {
+            const raw = document.documentElement.getAttribute('data-ui-chrome');
+            if (!raw) return false;
+            const layout = JSON.parse(raw), pane = layout['format-pane'];
+            return Math.abs(layout['title-bar'].width - width) < 1 && pane.visible
+                && pane.width >= 296 && pane.height > 0 && pane.x >= 0
+                && pane.x + pane.width <= width + .5;
+        }""", arg=width, timeout=20000)
+        return chrome()['format-pane']
     def click(name):
         rect = chrome()[name]
         assert rect['visible'], (name, rect)
@@ -75,8 +99,7 @@ with sync_playwright() as p:
     try:
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready'", timeout=120000)
-        page.wait_for_function("document.documentElement.hasAttribute('data-ui-chrome')")
-        settle()
+        wait_layout(1440, 1000)
         click('autosave-switch')
         attr('data-autosave', 'false')
         page.keyboard.press('Space')
@@ -94,8 +117,7 @@ with sync_playwright() as p:
         page.screenshot(path=str(out / 'chrome-desktop.png'))
         for width in [1920, 1440, 1280, 1180, 1100, 1024, 1000, 900, 820, 720, 640, 520, 390, 320]:
             page.set_viewport_size({'width': width, 'height': 844 if width < 640 else 1000})
-            page.wait_for_function('(w) => Math.abs(JSON.parse(document.documentElement.getAttribute("data-ui-chrome"))["title-bar"].width-w)<1', arg=width)
-            settle()
+            wait_layout(width, 844 if width < 640 else 1000)
             check_layout(width)
             if width in [1024, 390, 320]:
                 command('Show Insert ribbon')
@@ -117,7 +139,7 @@ with sync_playwright() as p:
         attr('data-slide-count', 4)
         print('PASS: switch pointer/keyboard states, centered unclipped chrome at 14 widths, compact command search.', flush=True)
         page.set_viewport_size({'width': 1440, 'height': 1000})
-        settle()
+        wait_layout(1440, 1000)
         command('New slide')
         page.keyboard.press('Control+a'); page.keyboard.press('Delete')
         command('Insert table')
@@ -142,12 +164,12 @@ with sync_playwright() as p:
         print('PASS: table palettes, first/last/banded columns, selective borders and undo/redo through real commands.', flush=True)
         command('Close format pane')
         page.set_viewport_size({'width': 390, 'height': 500})
-        settle()
+        wait_layout(390, 500)
         command('Format shape')
-        pane = chrome()['format-pane']
+        pane = wait_pane(390)
         assert pane['visible'] and pane['x'] >= 0 and pane['x'] + pane['width'] <= 390.5, pane
         command('Toggle slide thumbnails')
-        pane = chrome()['format-pane']
+        pane = wait_pane(390)
         assert pane['width'] >= 296 and pane['x'] >= 0 and pane['x'] + pane['width'] <= 390.5, pane
         page.screenshot(path=str(out / 'chrome-compact-inspector.png'))
         command('Close format pane')
@@ -158,10 +180,7 @@ with sync_playwright() as p:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready'", timeout=120000)
-        # The semantic diagnostics are dispatched separately from the first painted frame.
-        # Wait for this new context's arranged geometry, as the primary context does.
-        page.wait_for_function('() => {const value=document.documentElement.getAttribute("data-ui-chrome"); return value && JSON.parse(value)["title-bar"].width === 720;}', timeout=20000)
-        settle()
+        wait_layout(720, 500)
         check_layout(720)
         click('autosave-switch'); attr('data-autosave', 'false')
         page.keyboard.press('Space'); attr('data-autosave', 'true')
@@ -180,5 +199,5 @@ with sync_playwright() as p:
             page.screenshot(path=str(out / 'chrome-final.png'))
         except Exception as error:
             errors.append('Final screenshot: ' + str(error))
-        (out / 'browser-chrome.json').write_text(json.dumps({'observations': observations, 'errors': errors, 'failures': failures}, indent=2))
+        (out / 'browser-chrome.json').write_text(json.dumps({'observations': observations, 'errors': errors, 'failures': failures, 'lastLayoutVersion': value('data-ui-layout-version')}, indent=2))
         context.close(); browser.close()
