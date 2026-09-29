@@ -82,9 +82,6 @@ public static partial class PptxCodec
                 if (r > rows.Length - rs || c > columns.Length - cs) throw new InvalidDataException("Table merge extends outside the grid.");
                 var p = tc.Element(A + "tcPr"); var body = tc.Element(A + "txBody");
                 var baseStyle = new TextStyle { FontSize = 20, VerticalAlignment = (string?)p?.Attribute("anchor") switch { "ctr" => VerticalAlignment.Middle, "b" => VerticalAlignment.Bottom, _ => VerticalAlignment.Top } };
-                baseStyle = ReadRunStyle(body?.Element(A + "p")?.Element(A + "pPr")?.Element(A + "defRPr") ?? body?.Element(A + "p")?.Element(A + "endParaRPr"), baseStyle, color);
-                var paragraphProperties = body?.Element(A + "p")?.Element(A + "pPr");
-                baseStyle = ReadParagraphStyle(paragraphProperties, baseStyle);
                 var content = ReadRichText(new SlideShape { TextStyle = baseStyle }, body, color);
                 if ((textLength += content.Text.Length) > TableModel.MaxTextLength) throw new InvalidDataException("Table text exceeds the input limit.");
                 float Margin(string name, float fallback)
