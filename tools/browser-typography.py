@@ -27,6 +27,11 @@ with sync_playwright() as p:
         page.keyboard.type(text)
         page.keyboard.press('Enter')
         attr('data-command-version', before + 1)
+    def font_label(expected):
+        page.wait_for_function("""expected => {
+            const label = document.documentElement.getAttribute('data-ribbon-font-size');
+            return label && Math.abs(Number(label) - expected) <= .011;
+        }""", arg=expected, timeout=20000)
     def screenshot(name):
         frames()
         page.screenshot(path=str(out / (name + '.png')))
@@ -73,10 +78,15 @@ with sync_playwright() as p:
         fitted = float(value('data-primary-font-size'))
         attr('data-primary-text-length', len(text))
         attr('data-primary-range-start', 0); attr('data-primary-range-length', 5)
+        font_label(fitted)
+        command('Show Shape Format ribbon'); command('Show Home ribbon')
+        font_label(fitted)
+        assert abs(float(value('data-primary-font-size')) - fitted) < .001
         screenshot('typography-shrink-fit')
-        command('Undo'); attr('data-primary-font-size', str(int(size)))
+        command('Undo'); attr('data-primary-font-size', str(int(size))); font_label(size)
         command('Redo')
         assert abs(float(value('data-primary-font-size')) - fitted) < .001
+        font_label(fitted)
         command('Undo')
         command('Resize shape to text')
         page.wait_for_function('(height) => Number(document.documentElement.getAttribute("data-primary-height")) > height', arg=height)
@@ -88,6 +98,7 @@ with sync_playwright() as p:
         attr('data-slide-width', 960); attr('data-slide-height', 720)
         assert abs(float(value('data-primary-font-size')) - size * .75) < .001
         assert abs(float(value('data-primary-first-run-size')) - size * .75) < .001
+        font_label(size * .75)
         attr('data-primary-text-length', len(text))
         command('Undo'); attr('data-slide-width', 1280)
         attr('data-primary-font-size', str(int(size)))
@@ -97,6 +108,7 @@ with sync_playwright() as p:
         page.wait_for_function('() => JSON.parse(document.documentElement.getAttribute("data-ui-chrome"))["title-bar"].width === 720')
         command('Shrink text to fit')
         assert float(value('data-primary-font-size')) < size
+        font_label(float(value('data-primary-font-size')))
         screenshot('typography-compact')
         assert not errors, errors
         print('PASS: editable typography samples, slide show/sorter, text-fit commands, Ctrl+Enter, mixed-style preservation, slide resizing and undo/redo.', flush=True)

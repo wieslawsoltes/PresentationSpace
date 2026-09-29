@@ -227,9 +227,9 @@ public sealed class TextLayoutEngine : IDisposable
                 var section = sections[i];
                 int first = Math.Max(start, section.Start), last = Math.Min(end, section.End);
                 var run = ShapeRun(section.Font, key.Text.Substring(first, last - first));
-                var styles = new TextStyle[run.Glyphs.Codepoints.Length];
-                if (key.Ranges.IsEmpty) Array.Fill(styles, key.Style);
-                else for (int g = 0; g < styles.Length; g++)
+                // Uniform text needs no repeated per-glyph style references.
+                var styles = key.Ranges.IsEmpty ? Array.Empty<TextStyle>() : new TextStyle[run.Glyphs.Codepoints.Length];
+                for (int g = 0; g < styles.Length; g++)
                     styles[g] = RichText.StyleAt(source, first + (int)run.Glyphs.Clusters[g]);
                 spans.Add(new(section.Font, first, run.Glyphs, run.Advances, styles, run.Rtl));
                 used += run.Glyphs.Width;
@@ -254,8 +254,9 @@ public sealed class TextLayoutEngine : IDisposable
                 for (int start = 0; start < result.Codepoints.Length;)
                 {
                     int end = start + 1;
-                    var style = span.Styles[start];
-                    while (end < result.Codepoints.Length && span.Styles[end].Color == style.Color && span.Styles[end].Underline == style.Underline) end++;
+                    var style = span.Styles.Length == 0 ? piece.Style : span.Styles[start];
+                    while (end < result.Codepoints.Length && (span.Styles.Length == 0 ||
+                        (span.Styles[end].Color == style.Color && span.Styles[end].Underline == style.Underline))) end++;
                     using var builder = new SKTextBlobBuilder();
                     var run = builder.AllocateRawPositionedRun(span.Font.Font, end - start);
                     float underlineStart = pen;

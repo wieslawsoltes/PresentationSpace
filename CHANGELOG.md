@@ -2,6 +2,8 @@
 
 ## 0.7.0 — Shared shaped text and measured sizing
 
+- Keep fractional auto-fit sizes and imported font families visible in the ribbon without creating a formatting edit; retain the value when switching ribbon tabs.
+
 - Unify plain/mixed measurement and drawing in a reusable HarfBuzz text layout engine, used by the editor, previews, slide show, tables, chart labels and PNG/PDF.
 - Preserve repeated whitespace, four-space tabs, paragraph/soft-break distinctions and grapheme boundaries; align mixed font sizes to shared baselines and wrap bulleted continuations with hanging indents.
 - Add bounded native glyph-layout retention, immutable line metrics, cache statistics and font-version invalidation for text and retained pictures.
