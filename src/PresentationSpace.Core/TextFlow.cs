@@ -30,7 +30,12 @@ public static class TextFlow
         if (style is null || string.IsNullOrWhiteSpace(style.FontFamily) || style.FontFamily.Length > 256 ||
             !float.IsFinite(style.FontSize) || style.FontSize < 1 || style.FontSize > 2048 ||
             !float.IsFinite(style.LineSpacing) || style.LineSpacing <= 0 || style.LineSpacing > 10 ||
-            !Enum.IsDefined(style.Alignment) || !Enum.IsDefined(style.VerticalAlignment))
+            !Enum.IsDefined(style.Alignment) || !Enum.IsDefined(style.VerticalAlignment) ||
+            style.LineSpacingPoints is { } points && (!float.IsFinite(points) || points <= 0 || points > 10000) ||
+            !TextBoxModel.ValidMargin(style.SpaceBefore) || !TextBoxModel.ValidMargin(style.SpaceAfter) ||
+            style.ParagraphLeftMargin is { } left && !TextBoxModel.ValidMargin(left) ||
+            !TextBoxModel.ValidMargin(style.ParagraphRightMargin) || !TextBoxModel.ValidMargin(style.DefaultTabSize) ||
+            style.ParagraphIndent is { } indent && (!float.IsFinite(indent) || Math.Abs(indent) > 10000))
             throw new InvalidDataException("Invalid text style.");
     }
 
@@ -68,12 +73,12 @@ public static class TextFlow
         '\v' or '\u2028' => TextTokenKind.LineBreak,
         '\t' => TextTokenKind.Tab,
         '\u200b' => TextTokenKind.Opportunity,
-        '\u00a0' or '\u202f' or '\u2060' or '\ufeff' => TextTokenKind.Word,
+        '\u00a0' or '\u2007' or '\u2011' or '\u202f' or '\u2060' or '\ufeff' => TextTokenKind.Word,
         _ => char.IsWhiteSpace(c) ? TextTokenKind.Space : TextTokenKind.Word
     };
 
     /// <summary>Emergency wrapping never splits a grapheme, surrogate pair or explicit non-breaking group.</summary>
-    public static bool AllowsEmergencyBreak(ReadOnlySpan<char> text) => text.IndexOfAny('\u00a0', '\u202f', '\u2060') < 0 && text.IndexOf('\ufeff') < 0;
+    public static bool AllowsEmergencyBreak(ReadOnlySpan<char> text) => text.IndexOfAny('\u00a0', '\u202f', '\u2060') < 0 && text.IndexOfAny('\ufeff', '\u2007', '\u2011') < 0;
 
     public static ImmutableArray<int> GraphemeBoundaries(string text)
     {

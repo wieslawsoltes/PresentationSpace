@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0 — Text-body and paragraph layout
+
+- Isolate imported paragraph defaults from sibling paragraphs, honor body-level default spacing/styles, and avoid redundant pre-concatenation of imported text.
+
+- Add independent text insets, wrapping policy, paragraph spacing/indents, exact line advance, regular tab intervals and left-to-right justification to shared immutable layout.
+- Add reusable explicit-apply Uno text-layout authoring, commands and an editable paragraph sample. Preserve mixed character styling and make sizing use the same body margins.
+- Round-trip supported native DrawingML body/paragraph properties, resolve inherited body attributes, retain empty-paragraph styles on separators and reject malformed dimensions. Gate extended native properties with schema 5.
+- Clip to inset content bounds, avoid empty lines from oversized initial whitespace, retain the start of overwide aligned text and honor figure-space/nonbreaking-hyphen groups.
+- Avoid discarded full-token shaping before bounded emergency-wrap probes; retain existing cache/virtualization performance gates and compare against immutable 0.7.
+- Extend model, rendering, import/export and real-input browser regression coverage. Not full PowerPoint or Unicode typography conformance.
+
 ## 0.7.0 — Shared shaped text and measured sizing
 
 - Keep fractional auto-fit sizes and imported font families visible in the ribbon without creating a formatting edit; retain the value when switching ribbon tabs.

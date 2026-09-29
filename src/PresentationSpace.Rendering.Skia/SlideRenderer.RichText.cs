@@ -19,14 +19,17 @@ public sealed partial class SlideRenderer
     {
         ArgumentNullException.ThrowIfNull(shape);
         if (!float.IsFinite(width) || width <= 0 || !float.IsFinite(padding) || padding < 0) throw new ArgumentOutOfRangeException(nameof(width));
-        return TextLayout.Measure(shape.Text, shape.TextStyle, Math.Max(1, width - 2 * padding), shape.TextRanges);
+        var box = shape.TextBox;
+        if (box is not null) TextBoxModel.Validate(box);
+        return TextLayout.Measure(shape.Text, shape.TextStyle, Math.Max(1, width - (box?.MarginLeft ?? padding) - (box?.MarginRight ?? padding)), shape.TextRanges, box?.Wrap ?? true);
     }
 
-    public float MeasureRichTextHeight(SlideShape shape, float width, float padding = 0) => LayoutRichText(shape, width, padding).Height + 2 * padding;
+    public float MeasureRichTextHeight(SlideShape shape, float width, float padding = 0) => LayoutRichText(shape, width, padding).Height + (shape.TextBox?.MarginTop ?? padding) + (shape.TextBox?.MarginBottom ?? padding);
 
     public void DrawRichText(SKCanvas canvas, SlideShape shape, float padding = 3)
     {
         ArgumentNullException.ThrowIfNull(shape);
-        TextLayout.Draw(canvas, shape.Text, shape.TextStyle, shape.Bounds, padding, shape.TextRanges);
+        if (shape.TextBox is { } box) TextLayout.Draw(canvas, shape.Text, shape.TextStyle, shape.Bounds, box, shape.TextRanges);
+        else TextLayout.Draw(canvas, shape.Text, shape.TextStyle, shape.Bounds, padding, shape.TextRanges);
     }
 }

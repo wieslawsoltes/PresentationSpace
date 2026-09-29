@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace PresentationSpace.Core;
 
 public enum ShapeKind { Text, Rectangle, RoundRectangle, Ellipse, Triangle, Diamond, Line, Arrow, Image, Table, Chart }
-public enum ParagraphAlignment { Left, Center, Right }
+public enum ParagraphAlignment { Left, Center, Right, Justify }
 public enum VerticalAlignment { Top, Middle, Bottom }
 public enum TransitionKind { None, Fade, Push, Wipe }
 public enum AnimationKind { None, Appear, Fade, FlyIn }
@@ -35,6 +35,17 @@ public sealed record TextStyle
     public ParagraphAlignment Alignment { get; init; }
     public VerticalAlignment VerticalAlignment { get; init; }
     public float LineSpacing { get; init; } = 1.15f;
+    /// <summary>Absolute baseline advance in slide units; null uses LineSpacing. Small values deliberately permit overlapping lines.</summary>
+    public float? LineSpacingPoints { get; init; }
+    public float SpaceBefore { get; init; }
+    public float SpaceAfter { get; init; }
+    /// <summary>Null follows the legacy bullet indent (1.25 em), or zero for ordinary text.</summary>
+    public float? ParagraphLeftMargin { get; init; }
+    public float ParagraphRightMargin { get; init; }
+    /// <summary>Relative first-line offset; for bullets, positions the marker relative to the text start.</summary>
+    public float? ParagraphIndent { get; init; }
+    /// <summary>Zero uses four space advances; otherwise an explicit tab interval in slide units.</summary>
+    public float DefaultTabSize { get; init; }
 }
 
 /// <summary>A non-overlapping UTF-16 text range with explicit character formatting.</summary>
@@ -53,6 +64,7 @@ public sealed record SlideShape
     public float Opacity { get; init; } = 1;
     public string Text { get; init; } = "";
     public TextStyle TextStyle { get; init; } = new();
+    public TextBoxSpec? TextBox { get; init; }
     public ImmutableArray<TextRangeStyle> TextRanges { get; init; } = [];
     public PlaceholderKind Placeholder { get; init; }
     public int PlaceholderIndex { get; init; }
@@ -107,7 +119,27 @@ public partial class PresentationJsonContext : JsonSerializerContext;
 public static class DocumentSerializer
 {
     public const int MaxFileBytes = 64 * 1024 * 1024;
-    public static string Serialize(PresentationDocument document) => JsonSerializer.Serialize(document with { SchemaVersion = Math.Max(document.SchemaVersion, document.Slides.Any(s => s.Shapes.Any(x => x.Table is { } t && (t.FirstColumn || t.LastColumn || t.BandedColumns))) ? 4 : document.Slides.Any(s => s.Shapes.Any(x => x.Table is not null)) ? 3 : document.Slides.Any(s => s.Shapes.Any(x => x.Chart is not null)) ? 2 : 1) }, PresentationJsonContext.Default.PresentationDocument);
+    public static string Serialize(PresentationDocument document)
+    {
+        return JsonSerializer.Serialize(document with { SchemaVersion = RequiredSchema(document) }, PresentationJsonContext.Default.PresentationDocument);
+    }
+    private static int RequiredSchema(PresentationDocument document)
+    {
+        int version = document.SchemaVersion;
+        foreach (var slide in document.Slides) foreach (var shape in slide.Shapes)
+        {
+            if (shape.Chart is not null) version = Math.Max(version, 2);
+            if (shape.Table is { } table)
+            {
+                version = Math.Max(version, table.FirstColumn || table.LastColumn || table.BandedColumns ? 4 : 3);
+                if (TextBoxModel.HasParagraphLayout(table.TextStyle) || table.Cells.Any(c =>
+                    c.TextStyle is not null && TextBoxModel.HasParagraphLayout(c.TextStyle) || c.TextRanges.Any(r => TextBoxModel.HasParagraphLayout(r.Style)))) version = 5;
+            }
+            if (shape.TextBox is not null || TextBoxModel.HasParagraphLayout(shape.TextStyle) || shape.TextRanges.Any(r => TextBoxModel.HasParagraphLayout(r.Style))) version = 5;
+        }
+        return version;
+    }
+
     public static PresentationDocument Deserialize(string json)
     {
         if (json.Length > MaxFileBytes) throw new InvalidDataException("Presentation exceeds the 64 MB input limit.");
@@ -117,7 +149,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2 or 3 or 4)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();
@@ -134,6 +166,7 @@ public static class DocumentSerializer
                 if (s.TextStyle is null || !float.IsFinite(s.TextStyle.FontSize) || s.TextStyle.FontSize < 1 || s.TextStyle.FontSize > 2048 || !float.IsFinite(s.Rotation) || !float.IsFinite(s.Opacity) || s.Opacity < 0 || s.Opacity > 1 || !float.IsFinite(s.StrokeWidth) || s.StrokeWidth < 0 || s.StrokeWidth > 1000 || !float.IsFinite(s.TextStyle.LineSpacing) || s.TextStyle.LineSpacing <= 0 || s.TextStyle.LineSpacing > 10) throw new InvalidDataException("Invalid shape styling.");
                 if (s.Text is null || s.Text.Length > TextFlow.MaximumTextLength || s.TextRanges.IsDefault || !Enum.IsDefined(s.Placeholder) || s.PlaceholderIndex < 0) throw new InvalidDataException("Invalid text or placeholder.");
                 TextFlow.ValidateStyle(s.TextStyle);
+                if (s.TextBox is { } textBox) TextBoxModel.Validate(textBox);
                 int rangeEnd = 0;
                 foreach (var range in s.TextRanges)
                 {

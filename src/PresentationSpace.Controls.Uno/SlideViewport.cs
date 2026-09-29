@@ -286,10 +286,10 @@ public sealed partial class SlideViewport : UserControl
         var bounds = shape.Bounds;
         _editor = new TextBox
         {
-            Text = shape.Text, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
+            Text = shape.Text, AcceptsReturn = true, TextWrapping = TextBoxModel.Resolve(shape).Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             FontFamily = new FontFamily(shape.TextStyle.FontFamily), FontSize = Math.Max(8, shape.TextStyle.FontSize * _scale),
             Width = Math.Max(50, bounds.Width * _scale), Height = Math.Max(40, bounds.Height * _scale),
-            Padding = new(Math.Max(0, (shape.Kind == ShapeKind.Text ? 3 : 12) * _scale)), BorderThickness = new(1), BorderBrush = Ribbon.Uno.OfficePalette.Accent,
+            Padding = new(TextBoxModel.Resolve(shape).MarginLeft * _scale, TextBoxModel.Resolve(shape).MarginTop * _scale, TextBoxModel.Resolve(shape).MarginRight * _scale, TextBoxModel.Resolve(shape).MarginBottom * _scale), BorderThickness = new(1), BorderBrush = Ribbon.Uno.OfficePalette.Accent,
             Background = Ribbon.Uno.OfficePalette.Brush("F7FFFFFF"), Foreground = Ribbon.Uno.OfficePalette.Brush(shape.TextStyle.Color),
             FontWeight = shape.TextStyle.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
             FontStyle = shape.TextStyle.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,

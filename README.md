@@ -16,7 +16,15 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.7 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.8 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+
+## What is new in 0.8
+
+**Text boxes and paragraphs retain their layout.** Four independent text margins, wrap/no-wrap, paragraph before/after spacing, left/right and first-line indents, hanging bullet offsets, absolute line advance and regular tab intervals are part of the immutable document model and the shared renderer. Left-to-right justification expands breaking spaces only on automatically wrapped lines. Overflow is clipped inside the text content rectangle, without moving the beginning of an overwide right/center-aligned line out of view.
+
+**Reusable layout authoring.** Select a text box or text-bearing shape, open **Shape Format → Text layout** or search **Edit text layout**, adjust fields, then **Apply text layout** (or Enter in a numeric field). This is an explicit-apply whole-object paragraph editor; mixed character styles are retained. Unapplied fields are not recovery state. Command search also offers **Text wrap on/off**, **Text margins 0/3/12/24**, **Paragraph align Justify**, spacing presets and **Paragraph hanging indent**. **Open paragraph layout sample** appends one editable demonstration slide.
+
+**Interchange and efficiency.** Supported body insets/wrapping and paragraph properties round-trip as native DrawingML rather than being discarded. The importer resolves missing text-body attributes through available shape/layout/master properties and diagnoses unsupported vertical/multi-column/autofit modes. Native files using the new properties require schema 5; schemas 1–4 remain readable. Long splittable tokens no longer need a full discarded shaping pass before the bounded prefix measurements. See [Compatibility](docs/compatibility.md#08-text-body-and-paragraph-layout) and [Performance](docs/performance.md) for precise limits and warm/first-use methodology.
 
 ## What is new in 0.7
 

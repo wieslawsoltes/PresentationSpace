@@ -98,6 +98,7 @@ public sealed partial class PresentationEditor : UserControl
         _commands.Add(("Shrink text to fit", () => FitSelectedText(false)));
         _commands.Add(("Resize shape to text", () => FitSelectedText(true)));
         _commands.Add(("Open typography sample", OpenTypographySample));
+        BuildTextBodyCommands();
         _commands.Add(("Slide size Widescreen", () => ResizeSlides(1280, 720)));
         _commands.Add(("Slide size Standard", () => ResizeSlides(960, 720)));
         _commands.Add(("Slide size Portrait", () => ResizeSlides(720, 1280)));

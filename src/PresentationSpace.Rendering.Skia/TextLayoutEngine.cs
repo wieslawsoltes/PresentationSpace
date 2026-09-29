@@ -10,7 +10,13 @@ using HBBuffer = HarfBuzzSharp.Buffer;
 namespace PresentationSpace.Rendering.Skia;
 
 public sealed record TextLineMetrics(int Start, int Length, float Width, float Height, float Baseline,
-    float Indent, bool ParagraphStart, bool RightToLeft);
+    float Indent, bool ParagraphStart, bool RightToLeft)
+{
+    public float Top { get; init; }
+    public float Left { get; init; }
+    public bool Justified { get; init; }
+    public bool ParagraphEnd { get; init; }
+}
 public sealed record TextLayoutMetrics(float Width, float Height, int GlyphCount,
     ImmutableArray<TextLineMetrics> Lines, bool HasMixedDirection);
 public readonly record struct TextLayoutCacheStatistics(long Hits, long Misses, int Entries, long ApproximateBytes);
@@ -22,7 +28,7 @@ public readonly record struct TextLayoutCacheStatistics(long Hits, long Misses, 
 /// </summary>
 public sealed class TextLayoutEngine : IDisposable
 {
-    private readonly record struct Key(string Text, TextStyle Style, ImmutableArray<TextRangeStyle> Ranges, float Width);
+    private readonly record struct Key(string Text, TextStyle Style, ImmutableArray<TextRangeStyle> Ranges, float Width, bool Wrap);
     private readonly record struct FontKey(string Family, float Size, bool Bold, bool Italic);
     private sealed class NativeFont : IDisposable
     {
@@ -65,35 +71,43 @@ public sealed class TextLayoutEngine : IDisposable
     public long CacheBudget { get; set; } = 8 * 1024 * 1024;
     public TextLayoutCacheStatistics CacheStatistics => new(_hits, _misses, _entries.Count, _bytes);
 
-    public TextLayoutMetrics Measure(string text, TextStyle style, float width, ImmutableArray<TextRangeStyle> ranges = default)
+    public TextLayoutMetrics Measure(string text, TextStyle style, float width, ImmutableArray<TextRangeStyle> ranges = default) =>
+        Measure(text, style, width, ranges, true);
+
+    public TextLayoutMetrics Measure(string text, TextStyle style, float width, ImmutableArray<TextRangeStyle> ranges, bool wrap)
     {
-        var entry = Get(text, style, width, ranges, out bool temporary);
+        var entry = Get(text, style, width, ranges, wrap, out bool temporary);
         try { return entry.Metrics; } finally { if (temporary) entry.Dispose(); }
     }
 
-    /// <summary>Draw within the supplied box. Font advances, wrapping and baseline metrics are identical to Measure.</summary>
-    public void Draw(SKCanvas canvas, string text, TextStyle style, RectF bounds, float padding = 3, ImmutableArray<TextRangeStyle> ranges = default)
+    /// <summary>Draw with uniform insets. Measurement and painting share advances and baselines.</summary>
+    public void Draw(SKCanvas canvas, string text, TextStyle style, RectF bounds, float padding = 3, ImmutableArray<TextRangeStyle> ranges = default) =>
+        Draw(canvas, text, style, bounds, TextBoxSpec.Uniform(padding), ranges);
+
+    /// <summary>Draw with explicit text-body insets and wrapping. The inset content rectangle is clipped without replacing the host clip.</summary>
+    public void Draw(SKCanvas canvas, string text, TextStyle style, RectF bounds, TextBoxSpec box, ImmutableArray<TextRangeStyle> ranges = default)
     {
-        ArgumentNullException.ThrowIfNull(canvas);
-        if (!float.IsFinite(padding) || padding < 0 || !float.IsFinite(bounds.X) || !float.IsFinite(bounds.Y) ||
-            !float.IsFinite(bounds.Right) || !float.IsFinite(bounds.Bottom) || bounds.Width <= 0 || bounds.Height <= 0)
-            throw new ArgumentOutOfRangeException(nameof(bounds));
-        var entry = Get(text, style, Math.Max(1, bounds.Width - 2 * padding), ranges, out bool temporary);
+        ArgumentNullException.ThrowIfNull(canvas); TextBoxModel.Validate(box);
+        if (!float.IsFinite(bounds.X) || !float.IsFinite(bounds.Y) || !float.IsFinite(bounds.Right) || !float.IsFinite(bounds.Bottom) ||
+            bounds.Width <= 0 || bounds.Height <= 0) throw new ArgumentOutOfRangeException(nameof(bounds));
+        var content = TextBoxModel.Inset(bounds, box);
+        if (content.Width <= 0 || content.Height <= 0) return;
+        var entry = Get(text, style, content.Width, ranges, box.Wrap, out bool temporary);
         try
         {
-            float free = Math.Max(0, bounds.Height - 2 * padding - entry.Metrics.Height);
-            float top = bounds.Y + padding + (style.VerticalAlignment switch { Core.VerticalAlignment.Middle => free / 2, Core.VerticalAlignment.Bottom => free, _ => 0 });
+            float free = Math.Max(0, content.Height - entry.Metrics.Height);
+            float top = content.Y + (style.VerticalAlignment switch { Core.VerticalAlignment.Middle => free / 2, Core.VerticalAlignment.Bottom => free, _ => 0 });
             canvas.Save();
             try
             {
-                canvas.ClipRect(new(bounds.X, bounds.Y, bounds.Right, bounds.Bottom));
+                canvas.ClipRect(new(content.X, content.Y, content.Right, content.Bottom));
                 using var paint = new SKPaint { IsAntialias = true };
                 foreach (var run in entry.Runs)
                 {
                     paint.Color = run.Color;
-                    canvas.DrawText(run.Blob, bounds.X + padding + run.X, top + run.Y, paint);
+                    canvas.DrawText(run.Blob, content.X + run.X, top + run.Y, paint);
                     if (run.UnderlineWidth > 0)
-                        canvas.DrawRect(bounds.X + padding + run.X + run.UnderlineStart, top + run.Y + run.UnderlineY,
+                        canvas.DrawRect(content.X + run.X + run.UnderlineStart, top + run.Y + run.UnderlineY,
                             run.UnderlineWidth, run.UnderlineThickness, paint);
                 }
             }
@@ -113,7 +127,7 @@ public sealed class TextLayoutEngine : IDisposable
         while (_lru.First is { } first && (_entries.Count > Math.Max(0, MaximumCachedLayouts) || _bytes > Math.Max(0, CacheBudget)))
         { _entries.Remove(first.Value.Key); _bytes -= first.Value.Bytes; first.Value.Dispose(); _lru.RemoveFirst(); }
     }
-    private Entry Get(string text, TextStyle style, float width, ImmutableArray<TextRangeStyle> ranges, out bool temporary)
+    private Entry Get(string text, TextStyle style, float width, ImmutableArray<TextRangeStyle> ranges, bool wrap, out bool temporary)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(text); ArgumentNullException.ThrowIfNull(style);
@@ -123,7 +137,7 @@ public sealed class TextLayoutEngine : IDisposable
         if (!ReferenceEquals(TypefaceResolver, _observedResolver) || version != _observedVersion)
         { Clear(); _observedResolver = TypefaceResolver; _observedVersion = version; }
         Trim();
-        var key = new Key(text, style, ranges, width);
+        var key = new Key(text, style, ranges, width, wrap);
         if (_entries.TryGetValue(key, out var cached))
         { _hits++; _lru.Remove(cached); _lru.AddLast(cached); temporary = false; return cached.Value; }
         Validate(text, style, ranges);
@@ -278,19 +292,23 @@ public sealed class TextLayoutEngine : IDisposable
         var paragraphStyle = key.Style;
         Piece? bullet = null;
         bool firstLine = true, paragraphRtl = false, sawLtr = false, sawRtl = false;
-        float indent = 0, usedWidth = 0, y = 0, maxWidth = 0;
+        float usedWidth = 0, y = 0, maxWidth = 0, inkBottom = 0;
         int lineStart = 0;
+        float TextIndent() => TextBoxModel.LeftMargin(paragraphStyle) +
+            (firstLine && bullet is null ? TextBoxModel.FirstIndent(paragraphStyle) : 0);
+        float Available() => Math.Max(1, key.Width - TextIndent() - paragraphStyle.ParagraphRightMargin);
         void StartParagraph(int offset)
         {
             paragraphStyle = RichText.StyleAt(source, offset);
             firstLine = true; sawLtr = sawRtl = paragraphRtl = false;
             bullet = paragraphStyle.Bullets ? Bullet(paragraphStyle) : null;
-            indent = bullet is null ? 0 : paragraphStyle.FontSize * 1.25f;
+            y += paragraphStyle.SpaceBefore;
         }
-        void Finish(int end)
+        void Finish(int end, bool paragraphEnd = false, bool automatic = false)
         {
-            // Trailing breaking spaces do not skew centered/right aligned text. Source indexes are retained.
+            // Exclude trailing breaking spaces from alignment, while keeping their source indexes.
             while (pieces.Count > 0 && pieces[^1].Space) { usedWidth -= pieces[^1].Width; pieces.RemoveAt(pieces.Count - 1); }
+            usedWidth = Math.Max(0, usedWidth);
             float ascent = 0, descent = 0, leading = 0, size = 0;
             void Include(TextStyle style)
             {
@@ -301,21 +319,66 @@ public sealed class TextLayoutEngine : IDisposable
             if (pieces.Count == 0 || bullet is not null) Include(paragraphStyle);
             foreach (var piece in pieces) { if (piece.Spans.Count == 0) Include(piece.Style); else foreach (var span in piece.Spans) Include(span.Styles.FirstOrDefault() ?? piece.Style); }
             float ink = ascent + descent;
-            float height = Math.Max(ink + Math.Max(0, leading), size * paragraphStyle.LineSpacing);
-            float baseline = y + ascent + (height - ink) / 2;
-            float width = usedWidth + indent;
-            float align = paragraphStyle.Alignment switch { ParagraphAlignment.Center => (key.Width - width) / 2, ParagraphAlignment.Right => key.Width - width, _ => 0 };
-            if (firstLine && bullet is not null) Emit(bullet, align + (paragraphRtl ? usedWidth + indent - bullet.Width : 0), baseline);
-            float x = align + (paragraphRtl ? 0 : indent);
+            float height = paragraphStyle.LineSpacingPoints ?? Math.Max(ink + Math.Max(0, leading), size * paragraphStyle.LineSpacing);
+            // Exact spacing may intentionally overlap lines, but not clip the final descent.
+            float baseline = y + ascent + Math.Max(0, height - ink) / 2;
+            float indent = TextIndent(), available = Available();
+            float free = Math.Max(0, available - usedWidth);
+            float align = paragraphStyle.Alignment switch { ParagraphAlignment.Center => free / 2, ParagraphAlignment.Right => free, _ => 0 };
+            int spaces = 0;
+            bool eligible = automatic && paragraphStyle.Alignment == ParagraphAlignment.Justify && !paragraphRtl;
+            if (eligible)
+            {
+                bool seenWord = false;
+                foreach (var piece in pieces)
+                {
+                    if (!piece.Space) seenWord = true;
+                    else if (piece.Spans.Count == 0) { spaces = 0; break; } // Tab stops must not be stretched.
+                    else if (seenWord) spaces += piece.Length;
+                }
+            }
+            float extra = spaces == 0 ? 0 : free / spaces;
+            float width = indent + usedWidth + paragraphStyle.ParagraphRightMargin + (extra > 0 ? free : 0);
+            if (firstLine && bullet is not null)
+            {
+                float marker = paragraphRtl ? align + usedWidth + indent - bullet.Width : align + TextBoxModel.LeftMargin(paragraphStyle) + TextBoxModel.FirstIndent(paragraphStyle);
+                Emit(bullet, marker, baseline);
+            }
+            float x = align + (paragraphRtl && bullet is not null ? 0 : indent), left = x;
+            bool afterWord = false;
             for (int i = 0; i < pieces.Count; i++)
             {
                 var piece = pieces[paragraphRtl ? pieces.Count - 1 - i : i];
                 Emit(piece, x, baseline); x += piece.Width;
+                if (!piece.Space) afterWord = true;
+                else if (afterWord && extra > 0) x += extra * piece.Length;
             }
-            metrics.Add(new(lineStart, Math.Max(0, end - lineStart), width, height, baseline, indent, firstLine, paragraphRtl));
-            maxWidth = Math.Max(maxWidth, width); y += height;
+            metrics.Add(new(lineStart, Math.Max(0, end - lineStart), width, height, baseline, indent, firstLine, paragraphRtl)
+                { Top = y, Left = left, Justified = extra > 0, ParagraphEnd = paragraphEnd });
+            maxWidth = Math.Max(maxWidth, width); inkBottom = Math.Max(inkBottom, baseline + descent); y += height;
+            if (paragraphEnd) y += paragraphStyle.SpaceAfter;
             pieces.Clear(); usedWidth = 0; firstLine = false; lineStart = end;
             mixed |= sawLtr && sawRtl;
+        }
+        (Piece Piece, int Count) FitPrefix(TextToken token, ImmutableArray<int> boundaries, int position, float available)
+        {
+            int remaining = boundaries.Length - 1 - position;
+            int low = 1, high = 1;
+            Piece best = Shape(token.Start + boundaries[position], boundaries[position + 1] - boundaries[position]);
+            while (high < remaining && best.Width <= available)
+            {
+                low = high; high = Math.Min(remaining, high * 2);
+                var probe = Shape(token.Start + boundaries[position], boundaries[position + high] - boundaries[position]);
+                if (probe.Width > available) break;
+                best = probe; low = high;
+            }
+            while (low + 1 < high)
+            {
+                int middle = low + (high - low) / 2;
+                var probe = Shape(token.Start + boundaries[position], boundaries[position + middle] - boundaries[position]);
+                if (probe.Width <= available) { low = middle; best = probe; } else high = middle;
+            }
+            return (best, low);
         }
         try
         {
@@ -325,7 +388,8 @@ public sealed class TextLayoutEngine : IDisposable
             {
                 if (token.Kind is TextTokenKind.ParagraphBreak or TextTokenKind.LineBreak)
                 {
-                    Finish(token.Start); lineStart = token.Start + token.Length;
+                    Finish(token.Start, paragraphEnd: token.Kind == TextTokenKind.ParagraphBreak);
+                    lineStart = token.Start + token.Length;
                     if (token.Kind == TextTokenKind.ParagraphBreak) StartParagraph(lineStart);
                     continue;
                 }
@@ -336,8 +400,8 @@ public sealed class TextLayoutEngine : IDisposable
                     if (token.Kind == TextTokenKind.Tab)
                     {
                         var style = RichText.StyleAt(source, token.Start);
-                        float stop = Font(style).TabStop;
-                        float advance = stop - usedWidth % stop;
+                        float stop = paragraphStyle.DefaultTabSize > 0 ? paragraphStyle.DefaultTabSize : Font(style).TabStop;
+                        float advance = stop - (TextIndent() + usedWidth) % stop;
                         space = new(token.Start, token.Length, [], advance, style, true);
                     }
                     else space = Shape(token.Start, token.Length, true);
@@ -351,42 +415,46 @@ public sealed class TextLayoutEngine : IDisposable
                     if (!sawLtr && !sawRtl) paragraphRtl = rtl;
                     sawRtl |= rtl; sawLtr |= !rtl;
                 }
-                var word = Shape(token.Start, token.Length);
-                float available = Math.Max(1, key.Width - indent);
-                if (usedWidth > 0 && usedWidth + word.Width > available) Finish(token.Start);
-                if (word.Width <= available || !TextFlow.AllowsEmergencyBreak(key.Text.AsSpan(token.Start, token.Length)))
+                bool canSplit = key.Wrap && TextFlow.AllowsEmergencyBreak(key.Text.AsSpan(token.Start, token.Length));
+                // Do not shape an entire long token just to discard it and shape every prefix again.
+                // All prefix probes still use HarfBuzz; no guessed character-width shortcut.
+                Piece? word = token.Length <= 512 || !canSplit ? Shape(token.Start, token.Length) : null;
+                float available = Available();
+                if (!key.Wrap) { pieces.Add(word!); usedWidth += word!.Width; continue; }
+                bool hasContent = pieces.Any(p => !p.Space);
+                if (word is not null && usedWidth + word.Width <= available)
                 { pieces.Add(word); usedWidth += word.Width; continue; }
-                // Exponential probing bounds each prefix search by its line capacity,
-                // not the whole remaining word. This avoids quadratic long-URL wrapping.
+                if (word is null && hasContent)
+                {
+                    var probeBounds = TextFlow.GraphemeBoundaries(key.Text.Substring(token.Start, token.Length));
+                    var probe = FitPrefix(token, probeBounds, 0, Math.Max(1, available - usedWidth));
+                    if (probe.Count == probeBounds.Length - 1 && usedWidth + probe.Piece.Width <= available)
+                    { pieces.Add(probe.Piece); usedWidth += probe.Piece.Width; continue; }
+                }
+                if (hasContent) Finish(token.Start, automatic: true);
+                else if (pieces.Count > 0)
+                {
+                    // Oversized leading whitespace must not manufacture an empty visual line.
+                    pieces.Clear(); usedWidth = 0;
+                }
+                available = Available();
+                if (word is not null && (word.Width <= available || !canSplit))
+                { pieces.Add(word); usedWidth += word.Width; continue; }
                 var boundaries = TextFlow.GraphemeBoundaries(key.Text.Substring(token.Start, token.Length));
                 int position = 0;
                 while (position < boundaries.Length - 1)
                 {
-                    int remaining = boundaries.Length - 1 - position;
-                    int low = 1, high = 1;
-                    Piece best = Shape(token.Start + boundaries[position], boundaries[position + 1] - boundaries[position]);
-                    while (high < remaining && best.Width <= available)
-                    {
-                        low = high; high = Math.Min(remaining, high * 2);
-                        var probe = Shape(token.Start + boundaries[position], boundaries[position + high] - boundaries[position]);
-                        if (probe.Width > available) break;
-                        best = probe; low = high;
-                    }
-                    while (low + 1 < high)
-                    {
-                        int middle = low + (high - low) / 2;
-                        var probe = Shape(token.Start + boundaries[position], boundaries[position + middle] - boundaries[position]);
-                        if (probe.Width <= available) { low = middle; best = probe; } else high = middle;
-                    }
-                    pieces.Add(best); usedWidth += best.Width; position += low;
-                    if (position < boundaries.Length - 1) Finish(token.Start + boundaries[position]);
+                    var next = FitPrefix(token, boundaries, position, Available());
+                    pieces.Add(next.Piece); usedWidth += next.Piece.Width; position += next.Count;
+                    if (position < boundaries.Length - 1) Finish(token.Start + boundaries[position], automatic: true);
                 }
             }
-            Finish(key.Text.Length);
-            var info = new TextLayoutMetrics(maxWidth, y, glyphCount, metrics.ToImmutable(), mixed);
-            long bytes = 256 + key.Text.Length * 2L + key.Ranges.Length * 128L + glyphCount * 32L + metrics.Count * 80L + draw.Count * 160L;
+            Finish(key.Text.Length, paragraphEnd: true);
+            var info = new TextLayoutMetrics(maxWidth, Math.Max(y, inkBottom), glyphCount, metrics.ToImmutable(), mixed);
+            long bytes = 256 + key.Text.Length * 2L + key.Ranges.Length * 160L + glyphCount * 32L + metrics.Count * 96L + draw.Count * 160L;
             return new(key, info, draw, bytes);
         }
+
         catch { foreach (var run in draw) run.Blob.Dispose(); throw; }
         finally { foreach (var font in fonts.Values) font.Dispose(); }
     }

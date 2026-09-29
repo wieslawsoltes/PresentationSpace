@@ -103,7 +103,14 @@ public static class RichText
         Bullets = old.Bullets == value.Bullets ? style.Bullets : value.Bullets,
         Alignment = old.Alignment == value.Alignment ? style.Alignment : value.Alignment,
         VerticalAlignment = old.VerticalAlignment == value.VerticalAlignment ? style.VerticalAlignment : value.VerticalAlignment,
-        LineSpacing = old.LineSpacing == value.LineSpacing ? style.LineSpacing : value.LineSpacing
+        LineSpacing = old.LineSpacing == value.LineSpacing ? style.LineSpacing : value.LineSpacing,
+        LineSpacingPoints = old.LineSpacingPoints == value.LineSpacingPoints ? style.LineSpacingPoints : value.LineSpacingPoints,
+        SpaceBefore = old.SpaceBefore == value.SpaceBefore ? style.SpaceBefore : value.SpaceBefore,
+        SpaceAfter = old.SpaceAfter == value.SpaceAfter ? style.SpaceAfter : value.SpaceAfter,
+        ParagraphLeftMargin = old.ParagraphLeftMargin == value.ParagraphLeftMargin ? style.ParagraphLeftMargin : value.ParagraphLeftMargin,
+        ParagraphRightMargin = old.ParagraphRightMargin == value.ParagraphRightMargin ? style.ParagraphRightMargin : value.ParagraphRightMargin,
+        ParagraphIndent = old.ParagraphIndent == value.ParagraphIndent ? style.ParagraphIndent : value.ParagraphIndent,
+        DefaultTabSize = old.DefaultTabSize == value.DefaultTabSize ? style.DefaultTabSize : value.DefaultTabSize
     };
 
     public static Slide Reconcile(Slide before, Slide after)
