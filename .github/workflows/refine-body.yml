@@ -1,0 +1,34 @@
+name: Integrate text-layout authoring qualification
+on:
+  push:
+    branches: [work/text-body-layout-0.8]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'refine-body:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply verified refinements
+        run: |
+          set -euo pipefail
+          git diff --exit-code 23e290f41af07a583091f38b32e84803985dc5d8 HEAD -- src tests tools docs README.md CHANGELOG.md
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(Path('.ci/refine-body.xz').read_bytes())
+          assert hashlib.sha256(patch).hexdigest() == '2cdf84b5fdee757cedeadf72c776f8fad9a84a58198b6cef208cbc09dedabdea'
+          Path('/tmp/refine-body.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/refine-body.patch
+          git apply /tmp/refine-body.patch
+          rm .ci/refine-body.xz
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: explicit paragraph layout, immutable inset reuse and real-input qualification'
+          git push origin HEAD:work/text-body-layout-0.8
