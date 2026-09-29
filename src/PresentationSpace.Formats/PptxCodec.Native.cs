@@ -28,20 +28,41 @@ public static partial class PptxCodec
 
     private static XElement RichTextBody(SlideShape shape)
     {
-        var body = new XElement(P + "txBody", new XElement(A + "bodyPr", V("wrap", "square"), V("lIns", E(3)), V("rIns", E(3)),
-            V("tIns", E(3)), V("bIns", E(3)), V("anchor", shape.TextStyle.VerticalAlignment switch { VerticalAlignment.Middle => "ctr", VerticalAlignment.Bottom => "b", _ => "t" })), new XElement(A + "lstStyle"));
-        int start = 0;
-        foreach (var line in shape.Text.Split('\n'))
+        float padding = shape.Kind == ShapeKind.Text ? 3 : 12;
+        var body = new XElement(P + "txBody", new XElement(A + "bodyPr", V("wrap", "square"), V("lIns", E(padding)), V("rIns", E(padding)),
+            V("tIns", E(padding)), V("bIns", E(padding)), V("anchor", shape.TextStyle.VerticalAlignment switch { VerticalAlignment.Middle => "ctr", VerticalAlignment.Bottom => "b", _ => "t" })), new XElement(A + "lstStyle"));
+        XElement Paragraph(int offset)
         {
-            var style = RichText.StyleAt(shape, start);
-            var paragraph = new XElement(A + "p", new XElement(A + "pPr", V("algn", style.Alignment switch { ParagraphAlignment.Center => "ctr", ParagraphAlignment.Right => "r", _ => "l" }),
+            var style = RichText.StyleAt(shape, offset);
+            var defaults = RunProperties(style); defaults.Name = A + "defRPr";
+            var properties = new XElement(A + "pPr", V("algn", style.Alignment switch { ParagraphAlignment.Center => "ctr", ParagraphAlignment.Right => "r", _ => "l" }),
                 new XElement(A + "lnSpc", new XElement(A + "spcPct", V("val", (int)(style.LineSpacing * 100000)))),
-                style.Bullets ? new XElement(A + "buChar", V("char", "•")) : new XElement(A + "buNone")));
-            foreach (var range in RichText.Segments(shape, start, line.Length))
-                paragraph.Add(new XElement(A + "r", RunProperties(range.Style), new XElement(A + "t", shape.Text.Substring(range.Start, range.Length).Replace("\r", ""))));
-            paragraph.Add(new XElement(A + "endParaRPr", V("lang", "en-US")));
-            body.Add(paragraph); start += line.Length + 1;
+                style.Bullets ? new XElement(A + "buChar", V("char", "•")) : new XElement(A + "buNone"), defaults);
+            if (style.Bullets) { properties.Add(V("marL", E(style.FontSize * 1.25f))); properties.Add(V("indent", -E(style.FontSize * 1.25f))); }
+            return new XElement(A + "p", properties);
         }
+        var paragraph = Paragraph(0);
+        void Runs(int start, int length)
+        {
+            foreach (var range in RichText.Segments(shape, start, length))
+                paragraph.Add(new XElement(A + "r", RunProperties(range.Style), new XElement(A + "t", shape.Text.Substring(range.Start, range.Length))));
+        }
+        void Finish(int offset)
+        {
+            var end = RunProperties(RichText.StyleAt(shape, offset)); end.Name = A + "endParaRPr";
+            paragraph.Add(end); body.Add(paragraph);
+        }
+        int start = 0;
+        foreach (var token in TextFlow.Tokenize(shape.Text))
+        {
+            if (token.Kind is not (TextTokenKind.ParagraphBreak or TextTokenKind.LineBreak)) continue;
+            Runs(start, token.Start - start);
+            if (token.Kind == TextTokenKind.LineBreak)
+                paragraph.Add(new XElement(A + "br", RunProperties(RichText.StyleAt(shape, token.Start))));
+            else { Finish(token.Start); paragraph = Paragraph(token.Start + token.Length); }
+            start = token.Start + token.Length;
+        }
+        Runs(start, shape.Text.Length - start); Finish(shape.Text.Length);
         return body;
     }
 
@@ -64,9 +85,23 @@ public static partial class PptxCodec
         if (body is null) return shape;
         var text = new System.Text.StringBuilder();
         var ranges = ImmutableArray.CreateBuilder<TextRangeStyle>();
+        bool firstParagraph = true;
+        void Append(string value, TextStyle style)
+        {
+            if (value.Length == 0) return;
+            if (text.Length > TextFlow.MaximumTextLength - value.Length) throw new InvalidDataException("Text exceeds one million UTF-16 code units.");
+            if (style != shape.TextStyle)
+            {
+                if (ranges.Count > 0 && ranges[^1].Start + ranges[^1].Length == text.Length && ranges[^1].Style == style)
+                    ranges[^1] = ranges[^1] with { Length = ranges[^1].Length + value.Length };
+                else ranges.Add(new(text.Length, value.Length, style));
+            }
+            text.Append(value);
+        }
         foreach (var paragraph in body.Elements(A + "p"))
         {
-            if (text.Length > 0 || paragraph != body.Elements(A + "p").First()) text.Append('\n');
+            if (!firstParagraph) Append("\n", shape.TextStyle);
+            firstParagraph = false;
             var p = paragraph.Element(A + "pPr");
             var baseStyle = ReadRunStyle(p?.Element(A + "defRPr"), shape.TextStyle, color) with
             {
@@ -76,13 +111,9 @@ public static partial class PptxCodec
             };
             foreach (var run in paragraph.Elements())
             {
-                if (run.Name == A + "br") { text.Append('\n'); continue; }
+                if (run.Name == A + "br") { Append("\v", ReadRunStyle(run.Element(A + "rPr"), baseStyle, color)); continue; }
                 if (run.Name != A + "r" && run.Name != A + "fld") continue;
-                string value = run.Element(A + "t")?.Value ?? "";
-                if (value.Length == 0) continue;
-                var style = ReadRunStyle(run.Element(A + "rPr"), baseStyle, color);
-                if (style != shape.TextStyle) ranges.Add(new(text.Length, value.Length, style));
-                text.Append(value);
+                Append(run.Element(A + "t")?.Value ?? "", ReadRunStyle(run.Element(A + "rPr"), baseStyle, color));
             }
         }
         return shape with { Text = text.ToString(), TextRanges = ranges.ToImmutable() };

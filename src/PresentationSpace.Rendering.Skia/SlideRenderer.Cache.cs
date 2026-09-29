@@ -16,6 +16,7 @@ public sealed partial class SlideRenderer
     private string? _sceneBackground;
     private float _sceneWidth, _sceneHeight;
     private ITypefaceResolver? _cacheResolver;
+    private long _cacheResolverVersion = -1;
     private long _pictureBytes, _hits, _misses, _sceneHits, _sceneBytes, _recordingSceneBytes;
     private bool _recordingScene;
     private ImmutableArray<SlideShape> _rejectedScene;
@@ -29,6 +30,11 @@ public sealed partial class SlideRenderer
     /// <summary>Call when a resolver's fonts change in place. Replacing the resolver invalidates automatically.</summary>
     public void ClearRenderCache()
     {
+        _textLayout.Clear();
+        ClearPictureCache();
+    }
+    private void ClearPictureCache()
+    {
         _scene?.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBytes = 0; _rejectedScene = default;
         foreach (var entry in _pictureLru) entry.Picture.Dispose();
         _pictures.Clear(); _pictureLru.Clear(); _pictureBytes = 0;
@@ -36,8 +42,9 @@ public sealed partial class SlideRenderer
     private void PrepareCache()
     {
         var resolver = TypefaceResolver ?? DefaultTypefaceResolver;
-        if (!ReferenceEquals(resolver, _cacheResolver)) { ClearRenderCache(); _cacheResolver = resolver; }
-        if (!EnablePictureCache) { ClearRenderCache(); return; }
+        long version = (resolver as IVersionedTypefaceResolver)?.Version ?? 0;
+        if (!ReferenceEquals(resolver, _cacheResolver) || version != _cacheResolverVersion) { ClearRenderCache(); _cacheResolver = resolver; _cacheResolverVersion = version; }
+        if (!EnablePictureCache) { ClearPictureCache(); return; }
         while (_pictures.Count > Math.Max(0, MaximumCachedPictures) || _pictureBytes > Math.Max(0, PictureCacheBudget)) EvictPicture();
         if (_scene is not null && (!EnableSceneCache || !EnablePictureCache || _sceneShapes.Length > Math.Max(0, MaximumCachedPictures) || _sceneBytes > Math.Max(0, PictureCacheBudget))) { _scene.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBytes = 0; }
     }

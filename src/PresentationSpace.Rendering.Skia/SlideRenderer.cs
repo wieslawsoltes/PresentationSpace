@@ -112,50 +112,11 @@ public sealed partial class SlideRenderer : IDisposable
         }
         if (!string.IsNullOrEmpty(s.Text))
         {
-            if (s.TextRanges.IsEmpty) DrawText(c,s.Text,b,s.TextStyle,s.Kind == ShapeKind.Text ? 3 : 12);
-            else DrawRichText(c,s,s.Kind == ShapeKind.Text ? 3 : 12);
+            DrawRichText(c,s,s.Kind == ShapeKind.Text ? 3 : 12);
         }
     }
-    public void DrawText(SKCanvas c, string text, RectF b, TextStyle style, float padding = 3)
-    {
-        using var font = new SKFont(Face(style),style.FontSize) { Edging=SKFontEdging.SubpixelAntialias, Subpixel=true };
-        using var paint = new SKPaint { IsAntialias=true,Color=Color(style.Color,SKColors.Black) };
-        float width = Math.Max(1,b.Width-padding*2), height = Math.Max(1,b.Height-padding*2);
-        var lines = Wrap(text,font,width,style.Bullets).ToArray(); var metrics=font.Metrics;
-        float lineHeight=style.FontSize*style.LineSpacing;
-        float used=lines.Length*lineHeight, top=style.VerticalAlignment switch { Core.VerticalAlignment.Middle => Math.Max(0,(height-used)/2), Core.VerticalAlignment.Bottom => Math.Max(0,height-used), _=>0 };
-        c.Save(); c.ClipRect(new SKRect(b.X,b.Y,b.Right,b.Bottom)); float y=b.Y+padding+top-metrics.Ascent;
-        foreach(var line in lines)
-        {
-            float measure=font.MeasureText(line), x=b.X+padding+(style.Alignment switch {ParagraphAlignment.Center=>(width-measure)/2,ParagraphAlignment.Right=>width-measure,_=>0});
-            c.DrawText(line,x,y,SKTextAlign.Left,font,paint);
-            if(style.Underline)c.DrawRect(x,y+Math.Max(2,style.FontSize*.09f),measure,Math.Max(1,style.FontSize*.045f),paint);
-            y+=lineHeight; if(y>b.Bottom+lineHeight)break;
-        }
-        c.Restore();
-    }
-    private static IEnumerable<string> Wrap(string text,SKFont font,float width,bool bullets)
-    {
-        foreach(string paragraph in text.Replace("\r","").Split('\n'))
-        {
-            string line=""; var words=paragraph.Split(' ');
-            if(bullets)line="• ";
-            foreach(var word in words)
-            {
-                string candidate=line+(line.Length>0 && !line.EndsWith(' ') ? " " : "")+word;
-                if(font.MeasureText(candidate)<=width) {line=candidate; continue;}
-                if(line.Length>0){yield return line;line="";}
-                var elements=StringInfo.GetTextElementEnumerator(word);
-                while(elements.MoveNext())
-                {
-                    string next=elements.GetTextElement();
-                    if(line.Length>0 && font.MeasureText(line+next)>width){yield return line;line="";}
-                    line+=next;
-                }
-            }
-            yield return line;
-        }
-    }
+    public void DrawText(SKCanvas c, string text, RectF b, TextStyle style, float padding = 3) =>
+        TextLayout.Draw(c, text, style, b, padding);
     private SKImage? GetImage(PresentationDocument document,string? id)
     {
         if(id is null || !document.Assets.TryGetValue(id,out var asset))return null;

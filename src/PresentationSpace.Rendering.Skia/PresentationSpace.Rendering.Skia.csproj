@@ -3,5 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="../PresentationSpace.Core/PresentationSpace.Core.csproj" />
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
+    <PackageReference Include="SkiaSharp.HarfBuzz" Version="3.119.2" />
   </ItemGroup>
 </Project>

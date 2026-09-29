@@ -95,6 +95,9 @@ public sealed partial class PresentationEditor : UserControl
             search.TextChanged+=(_,e)=>{if(e.Reason==AutoSuggestionBoxTextChangeReason.UserInput)search.ItemsSource=_commands.Where(c=>c.Title.Contains(search.Text,StringComparison.OrdinalIgnoreCase)).Select(c=>c.Title).Take(10).ToArray();};
             search.QuerySubmitted+=SubmitCommand;
         }
+        _commands.Add(("Shrink text to fit", () => FitSelectedText(false)));
+        _commands.Add(("Resize shape to text", () => FitSelectedText(true)));
+        _commands.Add(("Open typography sample", OpenTypographySample));
         _commands.Add(("Toggle slide thumbnails",ToggleFilmstrip));
         _commands.Add(("Close format pane",HideInspector));
         foreach(var tab in new[]{"Home","Insert","Draw","Design","Transitions","Animations","Slide Show","Review","View","Shape Format","Table Design","Help"})
