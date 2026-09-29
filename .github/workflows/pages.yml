@@ -51,6 +51,7 @@ jobs:
           python3 tools/browser-smoke.py
           python3 tools/browser-performance.py
           python3 tools/browser-chrome.py
+          python3 tools/browser-typography.py
           mkdir -p artifacts/site/screenshots
           cp artifacts/screenshots/*.png artifacts/site/screenshots/
       - uses: actions/upload-artifact@v4

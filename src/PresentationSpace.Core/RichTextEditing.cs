@@ -66,10 +66,18 @@ public static class RichTextEditing
         ArgumentNullException.ThrowIfNull(format);
         if (start < 0 || length < 0 || start > shape.Text.Length - length || !RichText.IsBoundary(shape.Text, start) || !RichText.IsBoundary(shape.Text, start + length)) throw new ArgumentOutOfRangeException(nameof(start));
         if (shape.Text.Length == 0) return shape with { TextStyle = format(shape.TextStyle) };
-        int first = start == 0 ? 0 : shape.Text.LastIndexOf('\n', start - 1) + 1;
-        int last = length == 0 ? start : start + length - 1;
-        int newline = shape.Text.IndexOf('\n', Math.Min(last, shape.Text.Length));
-        int end = newline < 0 ? shape.Text.Length : newline + 1;
+        // CRLF is one delimiter. A caret between its code units belongs to
+        // the preceding paragraph; soft breaks do not start another paragraph.
+        int first = start;
+        if (first > 0 && first < shape.Text.Length && shape.Text[first - 1] == '\r' && shape.Text[first] == '\n') first--;
+        while (first > 0 && !TextFlow.IsParagraphBreak(shape.Text[first - 1])) first--;
+        int end = length == 0 ? start : start + length - 1;
+        while (end < shape.Text.Length && !TextFlow.IsParagraphBreak(shape.Text[end])) end++;
+        if (end < shape.Text.Length)
+        {
+            if (shape.Text[end] == '\r' && end + 1 < shape.Text.Length && shape.Text[end + 1] == '\n') end += 2;
+            else end++;
+        }
         if (first == end) return shape with { TextStyle = format(shape.TextStyle) };
         return RichText.Format(shape, first, end - first, format);
     }

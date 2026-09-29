@@ -289,16 +289,22 @@ public sealed partial class SlideViewport : UserControl
             Text = shape.Text, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
             FontFamily = new FontFamily(shape.TextStyle.FontFamily), FontSize = Math.Max(8, shape.TextStyle.FontSize * _scale),
             Width = Math.Max(50, bounds.Width * _scale), Height = Math.Max(40, bounds.Height * _scale),
-            Padding = new(3), BorderThickness = new(1), BorderBrush = Ribbon.Uno.OfficePalette.Accent,
+            Padding = new(Math.Max(0, (shape.Kind == ShapeKind.Text ? 3 : 12) * _scale)), BorderThickness = new(1), BorderBrush = Ribbon.Uno.OfficePalette.Accent,
             Background = Ribbon.Uno.OfficePalette.Brush("F7FFFFFF"), Foreground = Ribbon.Uno.OfficePalette.Brush(shape.TextStyle.Color),
             FontWeight = shape.TextStyle.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+            FontStyle = shape.TextStyle.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
             TextAlignment = shape.TextStyle.Alignment switch { ParagraphAlignment.Center => TextAlignment.Center, ParagraphAlignment.Right => TextAlignment.Right, _ => TextAlignment.Left },
             RenderTransform = new RotateTransform { Angle = shape.Rotation, CenterX = bounds.Width * _scale / 2, CenterY = bounds.Height * _scale / 2 }
         };
         Canvas.SetLeft(_editor, _ox + bounds.X * _scale);
         Canvas.SetTop(_editor, _oy + bounds.Y * _scale);
         _overlay.Children.Add(_editor);
-        _editor.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) { CancelText(); e.Handled = true; } };
+        _editor.KeyDown += (_, e) =>
+        {
+            if (e.Key == VirtualKey.Escape) { CancelText(); e.Handled = true; }
+            else if (e.Key == VirtualKey.Enter && Key(VirtualKey.Control))
+            { CommitText(); Focus(FocusState.Programmatic); e.Handled = true; }
+        };
         _editor.TextChanged += (_, _) => UpdateTextDraft();
         _editor.KeyDown += HandleFormattingKey;
         _editor.SelectionChanged += (_, _) => CaptureTextSelection();

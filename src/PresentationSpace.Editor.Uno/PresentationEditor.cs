@@ -44,6 +44,7 @@ public sealed partial class PresentationEditor : UserControl
         Viewport.Session=Session;_filmstrip.Session=Session;_format.Session=Session;_notes.Session=Session;_sorter.Session=Session;_status.Session=Session;
         _root.Background=OfficePalette.Brush("F5F5F5");_root.RowDefinitions.Add(new(){Height=new GridLength(44)});_root.RowDefinitions.Add(new(){Height=GridLength.Auto});_root.RowDefinitions.Add(new(){Height=GridLength.Auto});_root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});_root.RowDefinitions.Add(new(){Height=new GridLength(32)});
         _root.Children.Add(BuildTitleBar());Grid.SetRow(Ribbon,1);_root.Children.Add(Ribbon);Grid.SetRow(_notice,2);_root.Children.Add(_notice);Grid.SetRow(_workspace,3);_root.Children.Add(_workspace);Grid.SetRow(_status,4);_root.Children.Add(_status);BuildWorkspace();BuildRibbon();BuildCommands();
+        Ribbon.TabChanged+=(_,_)=>OnSessionChanged(this,new());
         Ribbon.ViewChanged+=(_,_)=>ViewChanged?.Invoke(this,EventArgs.Empty);
         TrackChrome("ribbon",Ribbon);TrackChrome("status-bar",_status);TrackChrome("workspace",_workspace);TrackChrome("format-pane",_format);TrackChrome("slide-viewport",Viewport);
         Grid.SetRowSpan(_player,5);_root.Children.Add(_player);Content=_root;
@@ -65,8 +66,7 @@ public sealed partial class PresentationEditor : UserControl
     private void OnSessionChanged(object? sender,EditorChangedEventArgs e)
     {
         _syncing=true;_documentName.Text=Session.Document.Title;_saveState.Text=Session.IsDirty?"• Edited":"✓";
-        if(_fontFamily is not null)_fontFamily.SelectedItem=(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.FontFamily??"Arial";
-        if(_fontSize is not null)_fontSize.SelectedItem=((Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.FontSize??28).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
+        SynchronizeFontSelectors(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle);
         void Mark(RibbonCommandButton? button,bool active){if(button is not null)button.Background=active?OfficePalette.Brush("F4D9CC"):OfficePalette.Brush("00FFFFFF");}
         Mark(_bold,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Bold==true);Mark(_italic,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Italic==true);Mark(_underline,(Viewport.CurrentTextStyle ?? Session.PrimaryShape?.TextStyle)?.Underline==true);_syncing=false;
         if(!e.IsPreview&&!ReferenceEquals(_observed,Session.Document)){_observed=Session.Document;if(_autoSave&&Storage is not null){_recoveryTimer.Stop();_recoveryTimer.Start();_status.Message="Saving local recovery…";}}
@@ -95,6 +95,12 @@ public sealed partial class PresentationEditor : UserControl
             search.TextChanged+=(_,e)=>{if(e.Reason==AutoSuggestionBoxTextChangeReason.UserInput)search.ItemsSource=_commands.Where(c=>c.Title.Contains(search.Text,StringComparison.OrdinalIgnoreCase)).Select(c=>c.Title).Take(10).ToArray();};
             search.QuerySubmitted+=SubmitCommand;
         }
+        _commands.Add(("Shrink text to fit", () => FitSelectedText(false)));
+        _commands.Add(("Resize shape to text", () => FitSelectedText(true)));
+        _commands.Add(("Open typography sample", OpenTypographySample));
+        _commands.Add(("Slide size Widescreen", () => ResizeSlides(1280, 720)));
+        _commands.Add(("Slide size Standard", () => ResizeSlides(960, 720)));
+        _commands.Add(("Slide size Portrait", () => ResizeSlides(720, 1280)));
         _commands.Add(("Toggle slide thumbnails",ToggleFilmstrip));
         _commands.Add(("Close format pane",HideInspector));
         foreach(var tab in new[]{"Home","Insert","Draw","Design","Transitions","Animations","Slide Show","Review","View","Shape Format","Table Design","Help"})

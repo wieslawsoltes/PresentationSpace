@@ -137,8 +137,8 @@ public static partial class TableModel
     }
     private static void CheckStyle(TextStyle? style)
     {
-        if (style is null || string.IsNullOrWhiteSpace(style.FontFamily) || style.FontFamily.Length > 256 || !float.IsFinite(style.FontSize) || style.FontSize < 1 || style.FontSize > 2048 || !float.IsFinite(style.LineSpacing) || style.LineSpacing <= 0 || style.LineSpacing > 10 || !Enum.IsDefined(style.Alignment) || !Enum.IsDefined(style.VerticalAlignment)) throw new InvalidDataException("Invalid table text style.");
-        CheckColor(style.Color);
+        TextFlow.ValidateStyle(style);
+        CheckColor(style!.Color);
     }
     public static TableCell CellAt(TableSpec table, int row, int column)
     {

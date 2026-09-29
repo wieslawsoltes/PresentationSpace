@@ -1,6 +1,6 @@
 # Compatibility and limitations
 
-PresentationSpace 0.6 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
+PresentationSpace 0.7 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
 
 ## Format matrix
 
@@ -30,7 +30,7 @@ PPTX import emits a compatibility warning. Unsupported content is not retained a
 
 Mixed character styles survive model edits, native serialization, supported PPTX interchange, Skia rendering and PNG/PDF output. Range indexes are UTF-16 and cannot split surrogate pairs. `ReplaceAll` preserves styles between matches; typing drafts reconcile changes incrementally before one undoable commit. Bold/italic/underline toggles apply one consistent state to the selected range. Alignment, bullets and line spacing apply to affected paragraphs.
 
-The inline input control is still a **plain Uno TextBox**: it does not display every mixed run style during typing. The slide canvas shows mixed formatting after commit. With no characters selected, character formatting applies to the selected object rather than a separate future-insertion style. Independent styling of trailing empty paragraphs, advanced lists, fields, hyperlinks, tabs, baseline controls, full bidirectional layout, shaping/ligatures and typography equivalence with Office are not implemented or qualified. Font availability changes layout across operating systems.
+The inline input control is still a **plain Uno TextBox**: it does not display every mixed run style during typing. The slide canvas shows mixed formatting after commit. With no characters selected, character formatting applies to the selected object rather than a separate future-insertion style. Independent styling of trailing empty paragraphs, advanced lists, fields, hyperlinks, tabs, baseline controls, full bidirectional layout and typography equivalence with Office remain unfinished. Horizontal HarfBuzz shaping/ligatures are implemented in 0.7, with the limitations below. Font availability changes layout across operating systems.
 
 Layout switching no longer deletes text placeholders. It maps compatible roles, preserves matched identity and direct formatting, and retains unmatched placeholders and custom objects. Blank retains existing content; returning to a layout can remap its placeholders. Legacy factory slides are recognized from known layout names and matching geometry only. This is not full PowerPoint layout/master inheritance or a master editor. Factory hint strings are ordinary text until replaced, not a separate placeholder prompt system.
 
@@ -83,3 +83,14 @@ The editor adds four built-in palettes, first/last-column emphasis, column bandi
 Responsive shell changes cover compact title controls, constrained document titles, ribbon scrolling, search access and inspector/notes/status adaptation. This is not pixel-exact PowerPoint UI parity or a full screen-reader/touch/browser certification. Table text still uses a plain native input overlay, and local automatic recovery still retains committed document state rather than an active input draft.
 
 User-resized filmstrip and docked inspector widths are retained for the current editor instance when resizing the window or closing/reopening a pane. They are not persisted across application restarts. Browser geometry diagnostics refresh after XAML arrangement and publish only changed snapshots; model/table diagnostics are not recomputed by layout callbacks.
+
+
+## 0.7 text layout and sizing scope
+
+Plain/mixed shape text, table text and chart labels share HarfBuzz/Skia measurement and drawing. Repeated spaces, four-space tab stops, mixed-size baselines, hanging bullets and extended-grapheme-safe emergency wrapping are implemented. CRLF/CR/LF/U+2029 are paragraph separators; VT/U+2028 are soft breaks. PPTX writes separate paragraphs and `a:br`; import normalizes them to LF and VT respectively. Trailing breaking spaces remain in the document but do not extend aligned visual line widths. NBSP, narrow NBSP and word-joiner groups are not emergency-split and can overflow a narrow box. Font glyph overhang is clipped to the shape box as before.
+
+This is not complete Unicode UAX #9/UAX #14, mixed-direction paragraph layout, CJK typography, script/language itemization or automatic per-grapheme font fallback. Single-direction RTL ordering is supported, but mixed-script/direction text needs further work. `HasMixedDirection` exposes detected mixed strong directions. HarfBuzz can form available ligatures/joining glyphs only when the selected host font covers that script; no font coverage is invented. Paint changes inside a glyph cluster use that cluster's start style. Native input still shows a plain TextBox rather than all run styles; advanced lists, paragraph fields, custom tab stops, complete Office line-height rules and trailing-empty-paragraph styling remain unfinished.
+
+Text fitting is an explicit undoable action. Shrink-to-fit uses uniform font scaling down to the requested minimum (8 units in the editor); it reports inability to fit instead of deleting content. Resize-shape-to-text changes height, retaining width and the rotated top edge. Table cells use the separate row auto-fit command. These are not persistent `normAutofit`/`spAutoFit` properties. Slide-size changes scale all shape geometry and mixed text/table styling; chart-specific label sizes are not modeled as authorable style fields, and resizing is not Office's full responsive layout system.
+
+The original two-slide typography sample is appended to the current document; it does not discard existing slides. The current native schema remains 4 when required by table flags, with no new text-layout serialization schema. The same renderer feeds editing, thumbnails, slide show, PNG and PDF, but native Office visual/open-save qualification is still required for equivalence claims.

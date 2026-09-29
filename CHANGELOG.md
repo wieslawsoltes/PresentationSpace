@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 — Shared shaped text and measured sizing
+
+- Keep fractional auto-fit sizes and imported font families visible in the ribbon without creating a formatting edit; retain the value when switching ribbon tabs.
+
+- Unify plain/mixed measurement and drawing in a reusable HarfBuzz text layout engine, used by the editor, previews, slide show, tables, chart labels and PNG/PDF.
+- Preserve repeated whitespace, four-space tabs, paragraph/soft-break distinctions and grapheme boundaries; align mixed font sizes to shared baselines and wrap bulleted continuations with hanging indents.
+- Add bounded native glyph-layout retention, immutable line metrics, cache statistics and font-version invalidation for text and retained pictures.
+- Add explicit shrink-to-fit and rotated-top-anchored resize-shape-to-text with undo, mixed-size-preserving slide resizing, and an append-only two-slide typography sample.
+- Write/read native PPTX soft breaks separately from paragraph breaks and align text insets and bullet indents with the renderer.
+- Match native input insets to zoom and italic state; commit shape text with Ctrl+Enter.
+- Add shaping, geometry, caching, malformed input and native interchange tests, typography browser workflows and separate warm/first-use benchmark workloads.
+- Preserve the user's NuGet metadata, package icons and release automation. Full bidi/fallback/Office typography and styled native input remain unfinished.
+
 ## 0.6.0 — Responsive chrome and table design
 
 - Replace the clipped title-bar switch with a reusable compact, keyboard-operable toggle; center the title-bar controls and constrain long document names.

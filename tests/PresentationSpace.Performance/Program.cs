@@ -5,7 +5,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
 
-// This exact driver is compiled against both the immutable 0.5 baseline and the changed source in CI.
+// This exact driver is compiled against both the immutable 0.6 baseline and the changed source in CI.
 // CPU/raster benchmark, not a hardware-GPU benchmark or an end-to-end browser FPS claim.
 var results = new List<object>();
 void Measure(string name, int iterations, Action<int> work)
@@ -39,6 +39,24 @@ Measure("lookup-512-cells-in-64x64-table", 80, iteration =>
 });
 TableLayout? layoutSink = null;
 Measure("layout-64x64-table-at-changing-bounds", 80, i => layoutSink = new TableLayout(table, new(i % 10, 0, 1280, 720)));
+// Public APIs are intentionally shared with the 0.6 baseline. Warm layout and
+// first-use shaping are separate workloads; report both, not only cache hits.
+var paragraph = SlideFactory.Text(string.Join(" ", Enumerable.Repeat("Office typography: AVATAR, efficient spaces and shared measurements.", 40)), 0, 0, 620, 700, 18);
+paragraph = paragraph with { TextRanges = [new(7, 10, new() { FontSize = 25, Bold = true })] };
+using var textRenderer = new SlideRenderer();
+float heightSink = 0;
+Measure("measure-warm-rich-paragraph", 120, _ => heightSink = textRenderer.MeasureRichTextHeight(paragraph, 620, 3));
+Measure("draw-warm-rich-paragraph", 80, _ => textRenderer.DrawRichText(surface.Canvas, paragraph));
+Measure("layout-first-use-rich-paragraph", 24, _ =>
+{
+    using var cold = new SlideRenderer(); heightSink = cold.MeasureRichTextHeight(paragraph, 620, 3);
+});
+var longToken = SlideFactory.Text(new string('x', 12000), 0, 0, 300, 600, 14);
+Measure("layout-first-use-12000-character-token", 16, _ =>
+{
+    using var cold = new SlideRenderer(); heightSink = cold.MeasureRichTextHeight(longToken, 300, 3);
+});
+GC.KeepAlive(heightSink);
 GC.KeepAlive(cellSink); GC.KeepAlive(layoutSink);
 GC.KeepAlive(sink);
 var report = new { runtime = Environment.Version.ToString(), os = Environment.OSVersion.ToString(), processorCount = Environment.ProcessorCount, results };

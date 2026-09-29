@@ -16,7 +16,17 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.6 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.7 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+
+## What is new in 0.7
+
+**Shared shaped text layout.** Plain and mixed-style text now use the same HarfBuzz glyph shaping, wrapping, line metrics and baseline placement in the slide editor, thumbnails, slide show, tables, chart labels, PNG and vector PDF. Color and underline changes do not break font shaping. Repeated spaces and four-space tab stops are measured explicitly; paragraph breaks and soft line breaks remain distinct. Emergency wrapping respects extended grapheme boundaries and explicit non-breaking groups. Bulleted continuations retain their hanging indent without repeating the marker.
+
+**Measured text fitting and slide sizing.** Select text-bearing shapes and use **Shrink text to fit** or **Resize shape to text** in Shape Format or command search. These explicit undoable operations preserve content and mixed font-size ratios. Resizing a rotated text box keeps its top edge in place. Widescreen/Standard/Portrait sizing now scales mixed text and table styling instead of flattening runs or resetting layouts. **Open typography sample** appends two editable slides to the current deck without replacing existing work.
+
+**Reusable, bounded text caching.** `TextLayoutEngine` returns immutable line metrics and retains bounded native glyph blobs shared by measurement and drawing. Font resolver identity/version changes invalidate both text layouts and retained slide pictures. See [Typography architecture](docs/architecture.md#shared-text-layout-07) and [Performance](docs/performance.md) for cache ownership, first-use costs and reproducible measurements.
+
+This is horizontal single-direction shaping, not complete Unicode bidirectional/line-breaking or PowerPoint typography conformance. Hosts must supply fonts covering their text. Mixed-direction paragraphs are diagnosed in layout metrics; automatic font fallback and fully styled native input remain unfinished. Text fitting is explicit, not a persistent Office auto-fit mode.
 
 ## What is new in 0.6
 
@@ -96,7 +106,7 @@ Extract and run `PresentationSpace` (`PresentationSpace.exe` on Windows). Builds
 
 ## NuGet packages
 
-All six libraries are MIT-licensed and published on [NuGet.org](https://www.nuget.org/packages?q=PresentationSpace). `PresentationSpace.Core`, `PresentationSpace.Formats` and `PresentationSpace.Rendering.Skia` target `net10.0` and have no UI-framework dependency (the renderer needs only SkiaSharp). The `*.Uno` packages target `net10.0-desktop` and `net10.0-browserwasm` on Uno Platform 6.7 with the Skia renderer. Every package is versioned together with the app, and symbols ship on NuGet.org as `.snupkg` with SourceLink.
+All six libraries are MIT-licensed and published on [NuGet.org](https://www.nuget.org/packages?q=PresentationSpace). `PresentationSpace.Core`, `PresentationSpace.Formats` and `PresentationSpace.Rendering.Skia` target `net10.0` and have no UI-framework dependency (the renderer uses SkiaSharp and SkiaSharp.HarfBuzz). The `*.Uno` packages target `net10.0-desktop` and `net10.0-browserwasm` on Uno Platform 6.7 with the Skia renderer. Every package is versioned together with the app, and symbols ship on NuGet.org as `.snupkg` with SourceLink.
 
 ```sh
 dotnet add package PresentationSpace.Core
@@ -188,7 +198,7 @@ Import is not lossless for arbitrary PPTX files, and valid OOXML output does not
 
 ### PresentationSpace.Rendering.Skia
 
-Draws slides, mixed-style text, images, merged/styled tables and the six chart types to any `SKCanvas`, with picture/scene caching, thumbnails and PNG/vector PDF export. Use it headlessly for exports or inside any Skia-based UI. Depends on Core and SkiaSharp 3.119; headless hosts must also reference the operating system's SkiaSharp native-assets package.
+Draws slides, mixed-style text, images, merged/styled tables and the six chart types to any `SKCanvas`, with picture/scene caching, thumbnails and PNG/vector PDF export. Use it headlessly for exports or inside any Skia-based UI. Depends on Core, SkiaSharp 3.119.2 and SkiaSharp.HarfBuzz 3.119.2; headless hosts must provide matching SkiaSharp and HarfBuzzSharp native assets for their operating system. Linux examples use `SkiaSharp.NativeAssets.Linux.NoDependencies` 3.119.2 and `HarfBuzzSharp.NativeAssets.Linux` 8.3.1.1.
 
 ```sh
 dotnet add package PresentationSpace.Rendering.Skia

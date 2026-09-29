@@ -8,13 +8,20 @@ public interface ITypefaceResolver
     SKTypeface? Resolve(TextStyle style);
 }
 
+/// <summary>A resolver whose in-place font changes invalidate retained rendering and layout.</summary>
+public interface IVersionedTypefaceResolver : ITypefaceResolver
+{
+    long Version { get; }
+}
+
 /// <summary>Host-supplied fonts, independent of Uno or installed operating-system fonts.
 /// Register before rendering and dispose after the owning workspace has closed.</summary>
-public sealed class TypefaceRegistry : ITypefaceResolver, IDisposable
+public sealed class TypefaceRegistry : IVersionedTypefaceResolver, IDisposable
 {
     private readonly Dictionary<(string Family, bool Bold, bool Italic), SKTypeface> _faces = [];
     private readonly Dictionary<(bool Bold, bool Italic), SKTypeface> _fallback = [];
     private bool _disposed;
+    public long Version { get; private set; }
 
     public void Register(string family, byte[] data, bool bold = false, bool italic = false, bool fallback = false)
     {
@@ -26,6 +33,7 @@ public sealed class TypefaceRegistry : ITypefaceResolver, IDisposable
         using var fontData = SKData.CreateCopy(data);
         var face = SKTypeface.FromData(fontData) ?? throw new InvalidDataException("Invalid font data.");
         _faces.Add(key, face);
+        Version++;
         if (fallback) _fallback[(bold, italic)] = face;
     }
 

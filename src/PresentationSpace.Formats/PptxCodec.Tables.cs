@@ -21,10 +21,6 @@ public static partial class PptxCodec
                 var body = RichTextBody(TableModel.TextShape(table, origin ? cell : cell with { Text = "", TextRanges = [] })); body.Name = A + "txBody";
                 foreach (string attribute in new[] { "lIns", "rIns", "tIns", "bIns", "anchor" }) body.Element(A + "bodyPr")!.SetAttributeValue(attribute, null);
                 var style = TableModel.Style(table, cell);
-                foreach (var paragraph in body.Elements(A + "p"))
-                {
-                    var run = RunProperties(style); run.Name = A + "defRPr"; paragraph.Element(A + "pPr")!.Add(run);
-                }
                 var properties = new XElement(A + "tcPr", V("marL", E(cell.MarginLeft)), V("marR", E(cell.MarginRight)), V("marT", E(cell.MarginTop)), V("marB", E(cell.MarginBottom)),
                     V("anchor", style.VerticalAlignment switch { VerticalAlignment.Middle => "ctr", VerticalAlignment.Bottom => "b", _ => "t" }));
                 properties.Add(TableLine("lnL", cell.Left, shape.Opacity), TableLine("lnR", cell.Right, shape.Opacity), TableLine("lnT", cell.Top, shape.Opacity), TableLine("lnB", cell.Bottom, shape.Opacity), Fill(TableModel.Fill(table, cell), shape.Opacity));

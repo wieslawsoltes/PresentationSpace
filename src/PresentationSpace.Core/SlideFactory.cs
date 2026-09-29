@@ -3,7 +3,7 @@ namespace PresentationSpace.Core;
 
 public static class SlideFactory
 {
-    public static SlideShape Text(string text, float x, float y, float w, float h, float size = 28, string color = "#243247", bool bold = false) => new() { Kind = ShapeKind.Text, Name = text.Split('\n')[0], Text = text, Bounds = new(x,y,w,h), Fill = "#00000000", TextStyle = new() { FontSize = size, Color = color, Bold = bold } };
+    public static SlideShape Text(string text, float x, float y, float w, float h, float size = 28, string color = "#243247", bool bold = false) => new() { Kind = ShapeKind.Text, Name = TextFlow.FirstLine(text), Text = text, Bounds = new(x,y,w,h), Fill = "#00000000", TextStyle = new() { FontSize = size, Color = color, Bold = bold } };
     public static Slide Create(string layout, float w = 1280, float h = 720)
     {
         var title = Text("Click to add title",w * .07f,h * .08f,w * .86f,h * .17f,44);
