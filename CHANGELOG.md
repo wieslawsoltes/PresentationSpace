@@ -2,6 +2,8 @@
 
 ## 0.8.0 — Text-body and paragraph layout
 
+- Isolate imported paragraph defaults from sibling paragraphs, honor body-level default spacing/styles, and avoid redundant pre-concatenation of imported text.
+
 - Add independent text insets, wrapping policy, paragraph spacing/indents, exact line advance, regular tab intervals and left-to-right justification to shared immutable layout.
 - Add reusable explicit-apply Uno text-layout authoring, commands and an editable paragraph sample. Preserve mixed character styling and make sizing use the same body margins.
 - Round-trip supported native DrawingML body/paragraph properties, resolve inherited body attributes, retain empty-paragraph styles on separators and reject malformed dimensions. Gate extended native properties with schema 5.
