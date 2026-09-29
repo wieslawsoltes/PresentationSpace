@@ -50,7 +50,7 @@ public sealed class TextLayoutEditor : UserControl
     public void SetValue(SlideShape shape)
     {
         ArgumentNullException.ThrowIfNull(shape); _source = shape;
-        var box = TextBoxModel.Resolve(shape); var style = shape.TextStyle;
+        var box = TextBoxModel.Resolve(shape); var style = RichText.StyleAt(shape, 0);
         void Set(string key, float? value) => _fields[key].Text = value?.ToString("R", CultureInfo.InvariantCulture) ?? "";
         Set("left", box.MarginLeft); Set("right", box.MarginRight); Set("top", box.MarginTop); Set("bottom", box.MarginBottom);
         Set("before", style.SpaceBefore); Set("after", style.SpaceAfter); Set("indent-left", style.ParagraphLeftMargin);
@@ -80,7 +80,7 @@ public sealed class TextLayoutEditor : UserControl
                 LineSpacing = Read("multiple")!.Value, LineSpacingPoints = Read("exact", true),
                 Alignment = Enum.Parse<ParagraphAlignment>((string)_alignment.SelectedItem) };
             TextBoxModel.Validate(box); TextFlow.ValidateStyle(style);
-            var next = RichText.Reconcile(source, source with { TextBox = box, TextStyle = style });
+            var next = TextBoxModel.ApplyLayout(source, box, style);
             ValueChanged?.Invoke(this, next); _source = next; _error.Text = ""; return true;
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or InvalidDataException)

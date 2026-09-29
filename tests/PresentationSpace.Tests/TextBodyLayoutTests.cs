@@ -168,6 +168,16 @@ public sealed class TextBodyLayoutTests
         var next = RichText.Reconcile(shape, shape with { TextStyle = shape.TextStyle with { SpaceBefore = 20 } });
         var style = RichText.StyleAt(next, 0); Assert.True(style.Bold); Assert.Equal(16, style.SpaceAfter); Assert.Equal(25, style.ParagraphLeftMargin); Assert.Equal(20, style.SpaceBefore);
     }
+    [Fact] public void ExplicitWholeObjectLayoutResetsAllParagraphsButNotCharacterFormatting()
+    {
+        var shape = Shape("first\nsecond");
+        shape = RichText.Format(shape, 6, 6, s => s with { SpaceAfter = 33, Alignment = ParagraphAlignment.Right, Bold = true, Color = "#224488" });
+        var next = TextBoxModel.ApplyLayout(shape, TextBoxSpec.Uniform(3), shape.TextStyle);
+        Assert.Equal(0, RichText.StyleAt(next, 6).SpaceAfter);
+        Assert.Equal(ParagraphAlignment.Left, RichText.StyleAt(next, 6).Alignment);
+        Assert.True(RichText.StyleAt(next, 6).Bold); Assert.Equal("#224488", RichText.StyleAt(next, 6).Color);
+        Assert.Equal(shape.Text, next.Text); Assert.Equal(shape.Bounds, next.Bounds);
+    }
     [Fact] public void ResizePreservesAndScalesTextBodyAndParagraphDimensions()
     {
         var shape = Shape() with { TextBox = new() { MarginLeft = 12, MarginTop = 20, Wrap = false }, TextStyle = new() { FontSize = 20, SpaceBefore = 9, ParagraphIndent = -10, LineSpacingPoints = 30 } };
