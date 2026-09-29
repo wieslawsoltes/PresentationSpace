@@ -84,9 +84,7 @@ public static partial class PptxCodec
                 var baseStyle = new TextStyle { FontSize = 20, VerticalAlignment = (string?)p?.Attribute("anchor") switch { "ctr" => VerticalAlignment.Middle, "b" => VerticalAlignment.Bottom, _ => VerticalAlignment.Top } };
                 baseStyle = ReadRunStyle(body?.Element(A + "p")?.Element(A + "pPr")?.Element(A + "defRPr") ?? body?.Element(A + "p")?.Element(A + "endParaRPr"), baseStyle, color);
                 var paragraphProperties = body?.Element(A + "p")?.Element(A + "pPr");
-                baseStyle = baseStyle with { Alignment = (string?)paragraphProperties?.Attribute("algn") switch { "ctr" => ParagraphAlignment.Center, "r" => ParagraphAlignment.Right, _ => ParagraphAlignment.Left },
-                    Bullets = paragraphProperties?.Element(A + "buChar") is not null,
-                    LineSpacing = Math.Clamp(Number(paragraphProperties?.Element(A + "lnSpc")?.Element(A + "spcPct"), "val", baseStyle.LineSpacing * 100000) / 100000, .1f, 10) };
+                baseStyle = ReadParagraphStyle(paragraphProperties, baseStyle);
                 var content = ReadRichText(new SlideShape { TextStyle = baseStyle }, body, color);
                 if ((textLength += content.Text.Length) > TableModel.MaxTextLength) throw new InvalidDataException("Table text exceeds the input limit.");
                 float Margin(string name, float fallback)
@@ -109,7 +107,7 @@ public static partial class PptxCodec
                     return new() { Color = color(line, "#D8DEE8"), Width = line.Element(A + "noFill") is not null ? 0 : width,
                         Dash = dash switch { "dash" => TableBorderDash.Dash, "dot" or "sysDot" => TableBorderDash.Dot, _ => TableBorderDash.Solid } };
                 }
-                var cell = new TableCell { Row = r, Column = c, RowSpan = rs, ColumnSpan = cs, Text = content.Text, TextStyle = baseStyle, TextRanges = content.TextRanges,
+                var cell = new TableCell { Row = r, Column = c, RowSpan = rs, ColumnSpan = cs, Text = content.Text, TextStyle = content.TextStyle, TextRanges = content.TextRanges,
                     Fill = color(p, "#FFFFFF"), Left = Border("lnL"), Right = Border("lnR"), Top = Border("lnT"), Bottom = Border("lnB"),
                     MarginLeft = Margin("marL", 9.6f), MarginRight = Margin("marR", 9.6f), MarginTop = Margin("marT", 4.8f), MarginBottom = Margin("marB", 4.8f) };
                 for (int rr = r; rr < r + rs; rr++) for (int cc = c; cc < c + cs; cc++)

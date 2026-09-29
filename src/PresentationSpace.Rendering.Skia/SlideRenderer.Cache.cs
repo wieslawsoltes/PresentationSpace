@@ -57,7 +57,7 @@ public sealed partial class SlideRenderer
     private static bool SameDrawing(SlideShape a, SlideShape b) => ReferenceEquals(a, b) ||
         a.Kind == b.Kind && a.Bounds.Width == b.Bounds.Width && a.Bounds.Height == b.Bounds.Height &&
         a.Fill == b.Fill && a.Stroke == b.Stroke && a.StrokeWidth == b.StrokeWidth &&
-        a.Text == b.Text && a.TextStyle == b.TextStyle && a.TextRanges == b.TextRanges &&
+        a.Text == b.Text && a.TextStyle == b.TextStyle && a.TextBox == b.TextBox && a.TextRanges == b.TextRanges &&
         ReferenceEquals(a.Chart, b.Chart) && ReferenceEquals(a.Table, b.Table) && a.Cells == b.Cells &&
         a.Labels == b.Labels && a.Values == b.Values && a.TableColumns == b.TableColumns;
 

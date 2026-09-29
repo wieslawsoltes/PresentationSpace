@@ -12,12 +12,12 @@ public sealed partial class SlideRenderer
         ArgumentNullException.ThrowIfNull(shape);
         if (!float.IsFinite(minimumFontSize) || minimumFontSize < 1 || minimumFontSize > 2048) throw new ArgumentOutOfRangeException(nameof(minimumFontSize));
         ValidateTextShape(shape);
-        float padding = shape.Kind == ShapeKind.Text ? 3 : 12;
-        float width = shape.Bounds.Width - 2 * padding, height = shape.Bounds.Height - 2 * padding;
+        var content = TextBoxModel.ContentBounds(shape);
+        float width = content.Width, height = content.Height;
         if (width <= 0 || height <= 0) return new(shape, 1, false);
         bool Fits(SlideShape candidate)
         {
-            var layout = LayoutRichText(candidate, width);
+            var layout = TextLayout.Measure(candidate.Text, candidate.TextStyle, width, candidate.TextRanges, TextBoxModel.Resolve(candidate).Wrap);
             return layout.Width <= width + .001f && layout.Height <= height + .001f;
         }
         if (Fits(shape)) return new(shape, 1, true);
@@ -39,6 +39,7 @@ public sealed partial class SlideRenderer
     {
         ArgumentNullException.ThrowIfNull(shape); ValidateTextShape(shape);
         float padding = shape.Kind == ShapeKind.Text ? 3 : 12;
+        if (TextBoxModel.ContentBounds(shape).Width <= 0) throw new InvalidOperationException("Text margins leave no horizontal content area.");
         float height = Math.Max(1, MeasureRichTextHeight(shape, shape.Bounds.Width, padding));
         if (!float.IsFinite(height) || height > 100000) throw new InvalidOperationException("Fitted text exceeds the maximum shape height.");
         float delta = (height - shape.Bounds.Height) / 2, angle = shape.Rotation * MathF.PI / 180;

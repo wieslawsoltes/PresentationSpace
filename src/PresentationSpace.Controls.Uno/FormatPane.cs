@@ -12,6 +12,8 @@ public sealed class FormatPane : SessionControl
 {
     private readonly StackPanel _body=new(){Spacing=13,Margin=new(16,14,16,24)};
     private readonly TextBlock _title=OfficePalette.Text("Format Shape",16,true);
+    private TextLayoutEditor? _textLayoutEditor;
+    public void FocusTextLayout() => _textLayoutEditor?.FocusFirstField();
     private TableDataEditor? _tableEditor;
     private bool _committingTable;
     public TableDataEditor? TableEditor => _tableEditor;
@@ -43,7 +45,7 @@ public sealed class FormatPane : SessionControl
         if(_building||Session is not {} s)return;_building=true;
         try
         {
-            _chartEditor=null;_tableEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
+            _chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
             if(_mode==InspectorMode.Selection){BuildSelection(s);return;}if(_mode==InspectorMode.Comments){BuildComments(s);return;}
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
@@ -87,6 +89,20 @@ public sealed class FormatPane : SessionControl
             if(shape.Kind!=ShapeKind.Table){Section("Line");Palette(color=>s.Apply("Outline color",x=>x with{Stroke=color}));Number("Line width",shape.StrokeWidth,v=>s.Apply("Outline width",x=>x with{StrokeWidth=Math.Clamp(v,0,100)}));}
             if(shape.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table))
             {
+                Section("Text box & paragraph layout");
+                if(s.Selection.Count==1)
+                {
+                    var source=shape;
+                    _textLayoutEditor=new TextLayoutEditor{IsEnabled=!shape.Locked};_textLayoutEditor.SetValue(shape);
+                    _textLayoutEditor.ValueChanged+=(_,next)=>
+                    {
+                        if(s.PrimaryShape is not {} current || current.Id!=source.Id || current.Locked || !ReferenceEquals(current,source))
+                            throw new InvalidOperationException("The object changed. Reopen its text layout before applying this draft.");
+                        s.Apply("Text box and paragraph layout",x=>x.Id==source.Id?next:x);
+                        source=s.PrimaryShape!;
+                    };
+                    _body.Children.Add(_textLayoutEditor);
+                }
                 Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.LostFocus+=(_,_)=>{if(text.Text!=s.PrimaryShape?.Text)s.Apply("Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
                 Number("Font size",shape.TextStyle.FontSize,v=>s.Apply("Font size",x=>x with{TextStyle=x.TextStyle with{FontSize=Math.Clamp(v,1,512)}}));Palette(color=>s.Apply("Text color",x=>x with{TextStyle=x.TextStyle with{Color=color}}));
                 Choice("Vertical alignment",Enum.GetNames<Core.VerticalAlignment>(),shape.TextStyle.VerticalAlignment.ToString(),value=>s.Apply("Text vertical alignment",x=>x with{TextStyle=x.TextStyle with{VerticalAlignment=Enum.Parse<Core.VerticalAlignment>(value)}}));
