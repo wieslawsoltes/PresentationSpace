@@ -132,12 +132,14 @@ public static class DocumentSerializer
                 var b = s.Bounds;
                 if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height) || b.Width <= 0 || b.Height <= 0 || Math.Abs(b.X) > 100000 || Math.Abs(b.Y) > 100000 || b.Width > 100000 || b.Height > 100000) throw new InvalidDataException("Invalid shape geometry.");
                 if (s.TextStyle is null || !float.IsFinite(s.TextStyle.FontSize) || s.TextStyle.FontSize < 1 || s.TextStyle.FontSize > 2048 || !float.IsFinite(s.Rotation) || !float.IsFinite(s.Opacity) || s.Opacity < 0 || s.Opacity > 1 || !float.IsFinite(s.StrokeWidth) || s.StrokeWidth < 0 || s.StrokeWidth > 1000 || !float.IsFinite(s.TextStyle.LineSpacing) || s.TextStyle.LineSpacing <= 0 || s.TextStyle.LineSpacing > 10) throw new InvalidDataException("Invalid shape styling.");
-                if (s.Text is null || s.TextRanges.IsDefault || !Enum.IsDefined(s.Placeholder) || s.PlaceholderIndex < 0) throw new InvalidDataException("Invalid text or placeholder.");
+                if (s.Text is null || s.Text.Length > TextFlow.MaximumTextLength || s.TextRanges.IsDefault || !Enum.IsDefined(s.Placeholder) || s.PlaceholderIndex < 0) throw new InvalidDataException("Invalid text or placeholder.");
+                TextFlow.ValidateStyle(s.TextStyle);
                 int rangeEnd = 0;
                 foreach (var range in s.TextRanges)
                 {
                     if (range is null || range.Style is null || range.Start < rangeEnd || range.Length <= 0 || range.Start > s.Text.Length - range.Length || !RichText.IsBoundary(s.Text, range.Start) || !RichText.IsBoundary(s.Text, range.Start + range.Length)) throw new InvalidDataException("Invalid rich-text range.");
                     var style = range.Style;
+                    TextFlow.ValidateStyle(style);
                     if (!float.IsFinite(style.FontSize) || style.FontSize < 1 || style.FontSize > 2048 || !float.IsFinite(style.LineSpacing) || style.LineSpacing <= 0 || style.LineSpacing > 10) throw new InvalidDataException("Invalid rich-text style.");
                     rangeEnd = range.Start + range.Length;
                 }

@@ -13,6 +13,27 @@ public static class TextFlow
 {
     public const int MaximumTextLength = 1_000_000;
 
+    public static string FirstLine(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int end = text.AsSpan().IndexOfAny('\r', '\n', '\v');
+        int unicode = text.AsSpan().IndexOfAny('\u2028', '\u2029');
+        if (unicode >= 0 && (end < 0 || unicode < end)) end = unicode;
+        return end < 0 ? text : text[..end];
+    }
+
+    public static bool IsParagraphBreak(char value) => value is '\r' or '\n' or '\u2029';
+
+    /// <summary>Style invariants shared by document edits, table validation and text layout.</summary>
+    public static void ValidateStyle(TextStyle? style)
+    {
+        if (style is null || string.IsNullOrWhiteSpace(style.FontFamily) || style.FontFamily.Length > 256 ||
+            !float.IsFinite(style.FontSize) || style.FontSize < 1 || style.FontSize > 2048 ||
+            !float.IsFinite(style.LineSpacing) || style.LineSpacing <= 0 || style.LineSpacing > 10 ||
+            !Enum.IsDefined(style.Alignment) || !Enum.IsDefined(style.VerticalAlignment))
+            throw new InvalidDataException("Invalid text style.");
+    }
+
     public static ImmutableArray<TextToken> Tokenize(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

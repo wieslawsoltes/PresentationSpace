@@ -9,7 +9,6 @@ public sealed partial class SlideRenderer : IDisposable
 {
     private sealed record CachedImage(SKImage Image, string Source, long Bytes, long Used);
     private readonly Dictionary<string, CachedImage> _images = [];
-    private readonly Dictionary<string, SKTypeface> _faces = [];
     private long _clock, _imageBytes;
     public long ImageCacheBudget { get; set; } = 64 * 1024 * 1024;
     public ITypefaceResolver? TypefaceResolver { get; set; }
@@ -56,19 +55,6 @@ public sealed partial class SlideRenderer : IDisposable
             }
         }
         finally { canvas.Restore(); }
-    }
-    private SKTypeface Face(TextStyle style)
-    {
-        var supplied = (TypefaceResolver ?? DefaultTypefaceResolver)?.Resolve(style);
-        if (supplied is not null) return supplied;
-        string key = $"{style.FontFamily}|{style.Bold}|{style.Italic}";
-        if (!_faces.TryGetValue(key, out var face))
-        {
-            if (_faces.Count >= 64) { var oldest = _faces.First(); oldest.Value.Dispose(); _faces.Remove(oldest.Key); }
-            face = SKTypeface.FromFamilyName(style.FontFamily, new SKFontStyle(style.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, style.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright));
-            _faces[key] = face;
-        }
-        return face;
     }
     private void DrawShape(SKCanvas c, PresentationDocument d, SlideShape s)
     {
@@ -166,5 +152,5 @@ public sealed partial class SlideRenderer : IDisposable
         }
         return output.ToArray();
     }
-    public void Dispose(){ClearRenderCache();_tableLayouts.Clear();foreach(var i in _images.Values)i.Image.Dispose();foreach(var f in _faces.Values)f.Dispose();_images.Clear();_faces.Clear();_imageBytes=0;}
+    public void Dispose(){ClearRenderCache();_tableLayouts.Clear();foreach(var i in _images.Values)i.Image.Dispose();_images.Clear();_imageBytes=0;}
 }

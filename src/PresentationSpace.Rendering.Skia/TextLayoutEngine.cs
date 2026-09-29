@@ -132,18 +132,12 @@ public sealed class TextLayoutEngine : IDisposable
     private static void Validate(string text, TextStyle style, ImmutableArray<TextRangeStyle> ranges)
     {
         if (text.Length > TextFlow.MaximumTextLength) throw new InvalidDataException("Text exceeds one million UTF-16 code units.");
-        static void Style(TextStyle? s)
-        {
-            if (s is null || string.IsNullOrWhiteSpace(s.FontFamily) || !float.IsFinite(s.FontSize) || s.FontSize < 1 || s.FontSize > 2048 ||
-                !float.IsFinite(s.LineSpacing) || s.LineSpacing <= 0 || s.LineSpacing > 10 || !Enum.IsDefined(s.Alignment) || !Enum.IsDefined(s.VerticalAlignment))
-                throw new InvalidDataException("Invalid text style.");
-        }
-        Style(style); int end = 0;
+        TextFlow.ValidateStyle(style); int end = 0;
         foreach (var range in ranges)
         {
             if (range is null || range.Start < end || range.Length <= 0 || range.Start > text.Length - range.Length ||
                 !RichText.IsBoundary(text, range.Start) || !RichText.IsBoundary(text, range.Start + range.Length)) throw new InvalidDataException("Invalid text range.");
-            Style(range.Style); end = range.Start + range.Length;
+            TextFlow.ValidateStyle(range.Style); end = range.Start + range.Length;
         }
     }
 

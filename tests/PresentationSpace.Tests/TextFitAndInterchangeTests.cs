@@ -98,5 +98,12 @@ public sealed class TextFitAndInterchangeTests
         Assert.True(renderer.ExportPdf(sample).Length > 1000);
         var data = PptxCodec.Export(sample).Data; using var stream = new MemoryStream(data); using var office = OfficeDocument.Open(stream, false);
         Assert.Empty(new OpenXmlValidator().Validate(office)); Assert.Equal(2, PptxCodec.Import(data).Document.Slides.Length);
+        if (Environment.GetEnvironmentVariable("RENDER_DIAGNOSTICS") is { Length: > 0 } directory)
+        {
+            Directory.CreateDirectory(directory);
+            for (int i = 0; i < sample.Slides.Length; i++) File.WriteAllBytes(Path.Combine(directory, $"typography-{i + 1}.png"), renderer.ExportPng(sample, sample.Slides[i], 1280));
+            File.WriteAllBytes(Path.Combine(directory, "typography.pdf"), renderer.ExportPdf(sample));
+            File.WriteAllBytes(Path.Combine(directory, "typography.pptx"), data);
+        }
     }
 }
