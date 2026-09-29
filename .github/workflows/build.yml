@@ -27,7 +27,7 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Unit, rendering and interoperability tests
         env:
-          RENDER_DIAGNOSTICS: artifacts/render-diagnostics
+          RENDER_DIAGNOSTICS: ${{ github.workspace }}/artifacts/render-diagnostics
         run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release --logger trx --results-directory artifacts/test-results
       - name: Same-runner CPU and raster benchmarks
         if: runner.os == 'Linux'

@@ -30,15 +30,19 @@ public sealed class TextLayoutEngine : IDisposable
         private readonly bool _ownsFace;
         public SKFont Font { get; }
         public SKShaper Shaper { get; }
+        public SKFontMetrics Metrics { get; }
+        public float TabStop { get; }
         public NativeFont(SKTypeface face, bool ownsFace, FontKey key)
         {
             _face = face; _ownsFace = ownsFace;
             Font = new(face, key.Size) { Edging = SKFontEdging.Antialias, Subpixel = true };
-            try { Shaper = new(face); }
+            try { Metrics = Font.Metrics; TabStop = Math.Max(1, Font.MeasureText(" ") * 4); Shaper = new(face); }
             catch { Font.Dispose(); if (ownsFace) face.Dispose(); throw; }
         }
         public void Dispose() { Shaper.Dispose(); Font.Dispose(); if (_ownsFace) _face.Dispose(); }
     }
+    private sealed record FontSection(int Start, int End, NativeFont Font);
+    private sealed record ShapedRun(SKShaper.Result Glyphs, float[] Advances, bool Rtl);
     private sealed record GlyphSpan(NativeFont Font, int Start, SKShaper.Result Glyphs, float[] Advances, TextStyle[] Styles, bool Rtl);
     private sealed record Piece(int Start, int Length, List<GlyphSpan> Spans, float Width, TextStyle Style, bool Space = false);
     private sealed record DrawRun(SKTextBlob Blob, SKColor Color, float X, float Y, float UnderlineStart, float UnderlineWidth, float UnderlineY, float UnderlineThickness);
@@ -159,42 +163,84 @@ public sealed class TextLayoutEngine : IDisposable
                 SKFontStyleWidth.Normal, style.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright));
             return fonts[fontKey] = new(face, supplied is null, fontKey);
         }
+        // Establish font-only sections once at extended-grapheme boundaries.
+        // Repeated width probes must not rescan every character and resolve its
+        // font again; paint-only changes still remain in the same shaping span.
+        var sections = new List<FontSection>();
+        void IndexFonts()
+        {
+            if (key.Ranges.IsEmpty)
+            { sections.Add(new(0, key.Text.Length, Font(key.Style))); return; }
+            int start = 0;
+            NativeFont? font = null;
+            TextStyle? previous = null;
+            foreach (int offset in StringInfo.ParseCombiningCharacters(key.Text))
+            {
+                var style = RichText.StyleAt(source, offset);
+                if (ReferenceEquals(style, previous)) continue;
+                previous = style;
+                var next = Font(style);
+                if (ReferenceEquals(next, font)) continue;
+                if (font is not null) sections.Add(new(start, offset, font));
+                start = offset; font = next;
+            }
+            if (font is not null) sections.Add(new(start, key.Text.Length, font));
+        }
+        int SectionAt(int offset)
+        {
+            int low = 0, high = sections.Count;
+            while (low < high)
+            {
+                int middle = low + (high - low) / 2;
+                if (sections[middle].End <= offset) low = middle + 1; else high = middle;
+            }
+            return low;
+        }
+        // Per-build reuse is bounded separately from retained layout caching.
+        // Glyph arrays contain no source-dependent paint styles, and are reused
+        // only with the identical resolved font/size and exact text fragment.
+        // This also avoids reshaping identical prefixes on each line of a long URL.
+        var shapedRuns = new Dictionary<(NativeFont Font, string Text), ShapedRun>();
+        int reusedCharacters = 0;
+        ShapedRun ShapeRun(NativeFont font, string value)
+        {
+            var runKey = (font, value);
+            if (shapedRuns.TryGetValue(runKey, out var cached)) return cached;
+            using var buffer = new HBBuffer(); buffer.AddUtf16(value); buffer.GuessSegmentProperties();
+            var shaped = font.Shaper.Shape(buffer, font.Font);
+            var positions = buffer.GlyphPositions;
+            var advances = new float[positions.Length];
+            float scale = font.Font.Size / 512f;
+            for (int i = 0; i < positions.Length; i++) advances[i] = positions[i].XAdvance * scale;
+            var result = new ShapedRun(shaped, advances, buffer.Direction == Direction.RightToLeft);
+            if (shapedRuns.Count < 256 && value.Length <= 4096 && reusedCharacters + value.Length <= 32768)
+            { shapedRuns.Add(runKey, result); reusedCharacters += value.Length; }
+            return result;
+        }
         Piece Shape(int start, int length, bool whitespace = false)
         {
-            string value = key.Text.Substring(start, length);
             var spans = new List<GlyphSpan>();
-            var boundaries = TextFlow.GraphemeBoundaries(value);
             float used = 0;
-            for (int i = 0; i < boundaries.Length - 1;)
+            int end = start + length;
+            for (int i = SectionAt(start); i < sections.Count && sections[i].Start < end; i++)
             {
-                int first = i;
-                var style = RichText.StyleAt(source, start + boundaries[i]);
-                var font = Font(style);
-                // Paint-only style boundaries must not disable kerning, ligatures or Arabic joining.
-                while (++i < boundaries.Length - 1 && ReferenceEquals(Font(RichText.StyleAt(source, start + boundaries[i])), font)) { }
-                string slice = value.Substring(boundaries[first], boundaries[i] - boundaries[first]);
-                using var buffer = new HBBuffer(); buffer.AddUtf16(slice); buffer.GuessSegmentProperties();
-                var shaped = font.Shaper.Shape(buffer, font.Font);
-                var positions = buffer.GlyphPositions;
-                var advances = new float[positions.Length];
-                var styles = new TextStyle[positions.Length];
-                for (int g = 0; g < positions.Length; g++)
-                {
-                    advances[g] = positions[g].XAdvance * (font.Font.Size / 512f);
-                    styles[g] = RichText.StyleAt(source, start + boundaries[first] + (int)shaped.Clusters[g]);
-                }
-                spans.Add(new(font, start + boundaries[first], shaped, advances, styles, buffer.Direction == Direction.RightToLeft));
-                used += shaped.Width;
+                var section = sections[i];
+                int first = Math.Max(start, section.Start), last = Math.Min(end, section.End);
+                var run = ShapeRun(section.Font, key.Text.Substring(first, last - first));
+                var styles = new TextStyle[run.Glyphs.Codepoints.Length];
+                if (key.Ranges.IsEmpty) Array.Fill(styles, key.Style);
+                else for (int g = 0; g < styles.Length; g++)
+                    styles[g] = RichText.StyleAt(source, first + (int)run.Glyphs.Clusters[g]);
+                spans.Add(new(section.Font, first, run.Glyphs, run.Advances, styles, run.Rtl));
+                used += run.Glyphs.Width;
             }
             return new(start, length, spans, used, RichText.StyleAt(source, start), whitespace);
         }
         Piece Bullet(TextStyle style)
         {
-            var font = Font(style);
-            using var buffer = new HBBuffer(); buffer.AddUtf16("•"); buffer.GuessSegmentProperties();
-            var result = font.Shaper.Shape(buffer, font.Font);
-            return new(0, 0, [new(font, 0, result, buffer.GlyphPositions.Select(p => p.XAdvance * font.Font.Size / 512f).ToArray(),
-                Enumerable.Repeat(style, result.Codepoints.Length).ToArray(), false)], result.Width, style);
+            var font = Font(style); var run = ShapeRun(font, "•");
+            return new(0, 0, [new(font, 0, run.Glyphs, run.Advances,
+                Enumerable.Repeat(style, run.Glyphs.Codepoints.Length).ToArray(), false)], run.Glyphs.Width, style);
         }
         void Emit(Piece piece, float x, float baseline)
         {
@@ -247,7 +293,7 @@ public sealed class TextLayoutEngine : IDisposable
             float ascent = 0, descent = 0, leading = 0, size = 0;
             void Include(TextStyle style)
             {
-                var m = Font(style).Font.Metrics;
+                var m = Font(style).Metrics;
                 ascent = Math.Max(ascent, -m.Ascent); descent = Math.Max(descent, m.Descent);
                 leading = Math.Max(leading, m.Leading); size = Math.Max(size, style.FontSize);
             }
@@ -272,6 +318,7 @@ public sealed class TextLayoutEngine : IDisposable
         }
         try
         {
+            IndexFonts();
             StartParagraph(0);
             foreach (var token in TextFlow.Tokenize(key.Text))
             {
@@ -288,7 +335,7 @@ public sealed class TextLayoutEngine : IDisposable
                     if (token.Kind == TextTokenKind.Tab)
                     {
                         var style = RichText.StyleAt(source, token.Start);
-                        float stop = Math.Max(1, Font(style).Font.MeasureText(" ") * 4);
+                        float stop = Font(style).TabStop;
                         float advance = stop - usedWidth % stop;
                         space = new(token.Start, token.Length, [], advance, style, true);
                     }
