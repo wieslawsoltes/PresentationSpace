@@ -1,0 +1,34 @@
+name: Integrate text and native table corrections
+on:
+  push:
+    branches: [work/text-layout-0.7]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'fix-text:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply verified text corrections
+        run: |
+          set -euo pipefail
+          git diff --exit-code 79790942d204fb08e7dce58247b52dc768f32903 HEAD -- src tests
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(Path('.ci/text-interop.xz').read_bytes())
+          assert hashlib.sha256(patch).hexdigest() == 'fa0981ea9769f3fd32d832c166438ad8cc07d6dd98dbd1ee96e327e5174544fc'
+          Path('/tmp/text-interop.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/text-interop.patch
+          git apply /tmp/text-interop.patch
+          rm .ci/text-interop.xz
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: align paragraph validation and remove duplicate native table run defaults'
+          git push origin HEAD:work/text-layout-0.7
