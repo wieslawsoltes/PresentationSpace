@@ -60,7 +60,7 @@ public sealed class TextLayoutTests
         var plain = Text("Repeated   spaces\tand words\nWrapped content with a long URL-like fragment.", width: 250);
         var ranged = plain with { TextRanges = [new(0, plain.Text.Length, plain.TextStyle)] };
         using var renderer = new SlideRenderer();
-        Assert.Equal(Pixels(c => renderer.DrawText(c, plain.Text, plain.TextStyle, plain.Bounds)), Pixels(c => renderer.DrawRichText(c, ranged)));
+        Assert.Equal(Pixels(c => renderer.DrawText(c, plain.Text, plain.Bounds, plain.TextStyle)), Pixels(c => renderer.DrawRichText(c, ranged)));
         Assert.Equal(renderer.MeasureRichTextHeight(plain, 250), renderer.MeasureRichTextHeight(ranged, 250));
     }
     [Fact] public void RepeatedSpacesHaveRealWidthAndTrailingSpacesDoNotShiftAlignment()

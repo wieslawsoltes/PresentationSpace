@@ -89,3 +89,28 @@ Direct table-cell input uses the shared `TableLayout` and inverse rotation hit t
 `TableGridIndex.For(table)` validates an immutable snapshot once and shares its ownership map and sorted merge-origin reading order using a `ConditionalWeakTable`. Equal-but-distinct snapshots deliberately receive distinct indexes. No global strong-reference list keeps old undo documents alive. `TableLayout` owns independent coordinate arrays, so callers cannot corrupt another layout by modifying its public X/Y arrays. Layout creation still has a first-use validation/index cost.
 
 Table border authoring expands ranges to merged owners, maps the requested sides, updates matching neighboring sides, and constructs a new immutable table. The model stores one border per cell side; partial modifications along a neighbor's merged side therefore fail atomically. Direct fills/text styles override palette and emphasis defaults. Native schema 4 announces the additive column-style flags to prevent older readers silently ignoring them.
+
+
+## Shared text layout (0.7)
+
+`PresentationSpace.Core.TextFlow` tokenizes paragraph/soft-line breaks, tabs, breaking spaces and explicit opportunities using extended grapheme boundaries. It deliberately does not claim complete UAX #14 line breaking. `DocumentLayout` implements validated, content-preserving text scaling and whole-presentation resizing independently of Uno and Skia.
+
+`PresentationSpace.Rendering.Skia.TextLayoutEngine` shapes horizontal text using `SkiaSharp.HarfBuzz` 3.119.2. UTF-16 HarfBuzz buffers preserve the model's source-index convention. Font/size/emphasis changes split shaping spans; paint-only changes preserve kerning and ligatures. A ligature spanning a paint boundary uses the style at its cluster start. Multiple fonts in one line share a baseline based on the largest ascent/descent. Tabs advance to four-space stops; trailing breaking spaces do not shift center/right alignment. Blank lines occupy a measured line. Soft breaks retain paragraph settings and bullet indentation without creating another list marker.
+
+The same immutable layout feeds `MeasureRichTextHeight`, `DrawText`, `DrawRichText`, table row fitting, chart labels, editor/thumbnail/slide-show surfaces, PNG and PDF. Returned `TextLayoutMetrics` includes content dimensions, glyph count, per-line source indexes and baselines, and `HasMixedDirection`. RTL paragraph word ordering is limited to single-direction content; this is not a Unicode bidi implementation. Font coverage is the host's responsibility, and a missing glyph can still render as a replacement box.
+
+The engine is single-thread-affine. It owns the fonts it resolves itself and all retained native text blobs, but borrows fonts supplied by `ITypefaceResolver`. Returned metrics are managed/immutable and never expose cached native blobs. `CacheBudget` defaults to an approximate 8 MiB and `MaximumCachedLayouts` to 256. Estimates include retained text, glyphs, ranges, lines and drawing runs, not process RSS or GPU memory. Oversized entries remain temporary and are disposed after the call; limits bound retention, not peak build cost. Text is limited to one million UTF-16 code units and 256 distinct family/size/emphasis combinations per layout. Call `Clear` after mutating a non-versioned font resolver. `IVersionedTypefaceResolver.Version` provides automatic invalidation; `TypefaceRegistry.Register` updates that version.
+
+`TextLayoutEngine.Dispose` is terminal. The pre-existing `SlideRenderer.Dispose` contract remains reusable because Uno surfaces call it during unload/reload; it releases retained resources without permanently disabling that renderer. Each independent worker should own its renderer and release it when finished.
+
+```csharp
+using var engine = new TextLayoutEngine { TypefaceResolver = myFonts };
+var style = new TextStyle { FontSize = 28 };
+TextLayoutMetrics metrics = engine.Measure("Measured typography", style, 600);
+engine.Draw(canvas, "Measured typography", style, new RectF(20, 20, 606, 120));
+// Draw uses a three-unit inset, giving the same 600-unit content width.
+```
+
+`SlideRenderer.FitTextToShape` returns `TextFitResult`, with the original shape and `Fits=false` when the requested minimum cannot fit. `FitShapeToText` changes only height and anchors the rotated top edge. These commands are explicit immutable edits, not continuous auto-fit properties. Presentation resizing scales X/Y bounds independently and text/strokes by the smaller axis ratio; mixed ranges and table cells retain their relative font sizes. Validation completes before the editor swaps the document. The inline Uno input remains a plain native TextBox, now with scaled insets, italic state and Ctrl+Enter commit.
+
+PPTX text export writes matching inset/hanging-bullet conventions and native `a:br` for soft breaks. Import normalizes paragraph boundaries to LF and soft breaks to VT; CRLF and Unicode paragraph/line separators therefore normalize on interchange. Unsupported paragraph properties, master inheritance and arbitrary package parts are not preserved losslessly.

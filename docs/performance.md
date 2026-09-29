@@ -48,3 +48,12 @@ The initial PR implementation (`72c19c1`, Actions run `36346283055`) ran the ide
 | Layout the same 64×64 table at changing bounds | 1.5894 | 0.0008 | 1,873,260 → 736 |
 
 The four existing editing/raster workloads were essentially unchanged (speed ratios 1.00–1.04× in that run). The large ratios for table workloads reflect the intentionally repeated, already-indexed case; they must not be generalized to overall editing, cold loading, export or frame rate. All timing and native-allocation limitations above apply. Inspect the `performance-comparison` artifact and rerun on representative documents.
+
+
+## 0.7 shared shaped-text workloads
+
+The comparison baseline is now immutable commit `42d73dac8e81931ab2f25b095e0aad4cc23207d0` (0.6 plus package documentation). The same driver is compiled against both source trees and retains the prior six editing/raster/table workloads. Four additional workloads distinguish repeated paragraph measurement, repeated paragraph drawing, first-use rich paragraph layout, and first-use emergency wrapping of a 12,000-character token. Each first-use iteration creates/releases its own renderer; no cached layout is presented as cold work.
+
+HarfBuzz shaping performs more work than unshaped character drawing. The retained text-layout cache is shared by drawing and measurement, independent of shape position and height. A width, text, range, style or font-resolver version change causes a new layout. The layout cache is bounded by entry count and approximate retained bytes; temporary build allocations/native storage and GPU resources are not measured by managed-allocation counters. Font combinations per layout are limited to 256. Long tokens use exponentially bounded prefix probes and grapheme-safe binary refinement, rather than repeatedly scanning the entire remaining suffix.
+
+CI writes `baseline.json`, `current.json` and `comparison.md`. Use those observed results for the tested commit; no blanket speed-up is guaranteed. Warm and first-use text results, as well as any regression in the existing six workloads, must be reported together. These synthetic CPU/raster checks are not browser FPS, physical-GPU completion time, cold application startup, native Office fidelity or an end-to-end presentation benchmark.

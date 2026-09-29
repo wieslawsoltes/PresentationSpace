@@ -98,6 +98,9 @@ public sealed partial class PresentationEditor : UserControl
         _commands.Add(("Shrink text to fit", () => FitSelectedText(false)));
         _commands.Add(("Resize shape to text", () => FitSelectedText(true)));
         _commands.Add(("Open typography sample", OpenTypographySample));
+        _commands.Add(("Slide size Widescreen", () => ResizeSlides(1280, 720)));
+        _commands.Add(("Slide size Standard", () => ResizeSlides(960, 720)));
+        _commands.Add(("Slide size Portrait", () => ResizeSlides(720, 1280)));
         _commands.Add(("Toggle slide thumbnails",ToggleFilmstrip));
         _commands.Add(("Close format pane",HideInspector));
         foreach(var tab in new[]{"Home","Insert","Draw","Design","Transitions","Animations","Slide Show","Review","View","Shape Format","Table Design","Help"})

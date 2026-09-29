@@ -44,6 +44,7 @@ public sealed partial class MainPage : Page
     {
 #if __WASM__
         UpdateChromeDiagnostics();
+        UpdateTextDiagnostics();
         global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-autosave','{(_editor.AutoSaveEnabled ? "true" : "false")}');document.documentElement.setAttribute('data-ribbon-tab','{_editor.Ribbon.SelectedTab}');");
         global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"document.documentElement.setAttribute('data-ribbon-offset','{_editor.Ribbon.GroupScrollOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)}');document.documentElement.setAttribute('data-ribbon-groups-overflow','{(_editor.Ribbon.GroupsOverflow ? "true" : "false")}');document.documentElement.setAttribute('data-ribbon-tabs-overflow','{(_editor.Ribbon.TabsOverflow ? "true" : "false")}');");
         var session = _editor.Session;
