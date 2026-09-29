@@ -2,50 +2,117 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version for a dry run (tags publish; manual runs only build and upload artifacts)
+        required: true
+        default: '0.6.0'
 permissions:
   contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  APP_NAME: PresentationSpace
+  APP_PROJECT: src/PresentationSpace.App/PresentationSpace.App.csproj
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        name: Resolve release version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        shell: bash
+        run: |
+          VERSION="$INPUT_VERSION"
+          if [ "$REF_TYPE" = tag ]; then VERSION="${REF_NAME#v}"; fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version '$VERSION'" >&2; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - run: dotnet test tests/PresentationSpace.Tests/PresentationSpace.Tests.csproj -c Release
+
   desktop:
-    needs: verify
+    name: Desktop (${{ matrix.rid }})
+    needs: [version, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            rid: linux-x64
-          - os: windows-latest
-            rid: win-x64
-          - os: macos-latest
-            rid: osx-arm64
-    runs-on: ${{ matrix.os }}
+        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      RID: ${{ matrix.rid }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - name: Publish self-contained desktop
+      - name: Publish self-contained single-file executable
         shell: bash
-        run: dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-desktop -r ${{ matrix.rid }} --self-contained true -c Release -p:PresentationTargetFrameworks=net10.0-desktop -p:Version=${GITHUB_REF_NAME#v} -o artifacts/app
-      - name: Archive distribution
+        run: |
+          dotnet publish "$APP_PROJECT" -c Release -f net10.0-desktop -r "$RID" --self-contained true \
+            -p:PresentationTargetFrameworks=net10.0-desktop \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none -p:DebugSymbols=false -p:Version="$VERSION" \
+            -o "artifacts/desktop/$RID"
+      - name: Package executable
         shell: bash
-        run: python -c "import shutil; shutil.make_archive('PresentationSpace-${{ github.ref_name }}-${{ matrix.rid }}', 'zip', 'artifacts/app')"
+        run: |
+          OUT="artifacts/desktop/$RID"
+          find "$OUT" -name '*.pdb' -delete
+          mkdir -p artifacts/dist
+          BASE="$APP_NAME-$VERSION-$RID"
+          if [[ "$RID" == win-* ]]; then
+            mv "$OUT/$APP_NAME.App.exe" "$OUT/$APP_NAME.exe"
+            test "$(find "$OUT" -type f | wc -l)" -eq 1
+            (cd "$OUT" && zip -q "$GITHUB_WORKSPACE/artifacts/dist/$BASE.zip" "$APP_NAME.exe")
+          else
+            mv "$OUT/$APP_NAME.App" "$OUT/$APP_NAME"
+            chmod +x "$OUT/$APP_NAME"
+            test "$(find "$OUT" -type f | wc -l)" -eq 1
+            tar -C "$OUT" -czf "artifacts/dist/$BASE.tar.gz" "$APP_NAME"
+          fi
+          ls -la artifacts/dist
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.rid }}
-          path: '*.zip'
+          path: artifacts/dist/*
+          if-no-files-found: error
+
   packages:
-    needs: verify
+    needs: [version, verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -54,42 +121,122 @@ jobs:
         shell: bash
         run: |
           for project in Core Formats Rendering.Skia Ribbon.Uno Controls.Uno Editor.Uno; do
-            dotnet pack "src/PresentationSpace.$project/PresentationSpace.$project.csproj" -c Release -p:Version=${GITHUB_REF_NAME#v} -o artifacts/packages
+            dotnet pack "src/PresentationSpace.$project/PresentationSpace.$project.csproj" -c Release -p:Version="$VERSION" -o artifacts/packages
           done
+          ls -la artifacts/packages
       - uses: actions/upload-artifact@v4
         with:
-          name: packages
-          path: artifacts/packages/*.nupkg
+          name: nuget-packages
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+          if-no-files-found: error
+
   browser:
-    needs: verify
+    needs: [version, verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - run: dotnet workload install wasm-tools --skip-manifest-update
       - name: Publish browser archive
+        shell: bash
         run: |
-          dotnet publish src/PresentationSpace.App/PresentationSpace.App.csproj -f net10.0-browserwasm -c Release -p:PresentationTargetFrameworks=net10.0-browserwasm -p:Version=${GITHUB_REF_NAME#v} -p:WasmShellWebAppBasePath=/ -o artifacts/browser
+          dotnet publish "$APP_PROJECT" -f net10.0-browserwasm -c Release -p:PresentationTargetFrameworks=net10.0-browserwasm -p:Version="$VERSION" -p:WasmShellWebAppBasePath=/ -o artifacts/browser
           python3 tools/prepare-pages.py artifacts/browser artifacts/site
-          python3 -c "import shutil; shutil.make_archive('PresentationSpace-${{ github.ref_name }}-browser', 'zip', 'artifacts/site')"
+          python3 -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', 'artifacts/site')" "$APP_NAME-v$VERSION-browser"
       - uses: actions/upload-artifact@v4
         with:
           name: browser-release
           path: '*.zip'
+          if-no-files-found: error
+
   publish:
-    needs: [desktop, packages, browser]
+    needs: [version, desktop, packages, browser]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
+          pattern: desktop-*
           path: release-assets
           merge-multiple: true
-      - name: Create GitHub release
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-release
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: packages
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          cp packages/*.nupkg release-assets/
+          (cd release-assets && sha256sum * > SHA256SUMS)
+          cat release-assets/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: presentationspace-release
+          path: release-assets/*
+          if-no-files-found: error
+      - name: Create GitHub release for version tag
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release-assets/*.zip release-assets/*.nupkg --verify-tag --generate-notes --title "PresentationSpace $GITHUB_REF_NAME"
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          PRE=()
+          case "$VERSION" in *-*) PRE=(--prerelease);; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            gh release create "$TAG" release-assets/* --verify-tag --generate-notes --title "PresentationSpace $TAG" "${PRE[@]}"
+          fi
+
+  nuget:
+    name: Publish to NuGet.org (Trusted Publishing)
+    needs: [version, publish]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: nuget
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: packages
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check NuGet user
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER || secrets.NUGET_USER }}
+        run: test -n "$NUGET_USER" || { echo 'Set the NUGET_USER variable (your nuget.org profile name) for this repository or its nuget environment.' >&2; exit 1; }
+      - name: NuGet login (OIDC → short-lived API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER || secrets.NUGET_USER }}
+      - name: Push packages
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "packages/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

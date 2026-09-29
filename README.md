@@ -78,6 +78,20 @@ python3 tools/prepare-pages.py artifacts/browser artifacts/site
 
 Serve the distribution over HTTP(S) at the configured base path. `file://` loading is unsupported. CI tests the published application in Chromium before deploying to GitHub Pages.
 
+## Download
+
+Every [release](https://github.com/wieslawsoltes/PresentationSpace/releases/latest) ships a self-contained, single-file desktop app — no .NET install needed:
+
+| OS | x64 | Arm64 |
+| --- | --- | --- |
+| Windows | `PresentationSpace-<version>-win-x64.zip` | `PresentationSpace-<version>-win-arm64.zip` |
+| macOS | `PresentationSpace-<version>-osx-x64.tar.gz` | `PresentationSpace-<version>-osx-arm64.tar.gz` |
+| Linux | `PresentationSpace-<version>-linux-x64.tar.gz` | `PresentationSpace-<version>-linux-arm64.tar.gz` |
+
+Extract and run `PresentationSpace` (`PresentationSpace.exe` on Windows). Builds are not code-signed yet: on macOS clear the quarantine flag with `xattr -d com.apple.quarantine PresentationSpace`; on Windows choose **More info → Run anyway** in SmartScreen. Verify downloads against `SHA256SUMS`.
+
+The libraries below are published to [NuGet.org](https://www.nuget.org/packages?q=PresentationSpace), e.g. `dotnet add package PresentationSpace.Editor.Uno`.
+
 ## Six independently reusable libraries
 
 | Package | Responsibility | Dependencies |
@@ -89,7 +103,7 @@ Serve the distribution over HTTP(S) at the configured base path. `file://` loadi
 | `PresentationSpace.Controls.Uno` | Viewport, filmstrip, sorter, inspector, table/chart data editors, notes, splitters, status and slide show | Uno + renderer |
 | `PresentationSpace.Editor.Uno` | Embeddable complete editor and injectable storage contract | Reusable libraries above |
 
-`PresentationSpace.App` is the executable host. No library references the app. CI produces six NuGet packages; automatic publication to nuget.org is not configured.
+`PresentationSpace.App` is the executable host. No library references the app. CI produces six NuGet packages; tagged releases publish them to nuget.org.
 
 ### Embed the editor
 
@@ -206,7 +220,7 @@ The normal workflows are deliberately limited to three responsibilities:
 
 - **Build and test:** Linux, Windows and macOS matrix; headless editing/geometry/rendering tests, native serialization, PPTX round trips, independent Open XML validation of presentations and chart workbooks, desktop compilation, and same-runner CPU/raster baseline comparisons.
 - **Browser and GitHub Pages:** production WebAssembly publish, real Chromium keyboard interactions, selected-word formatting, undo/redo, content-preserving layouts, multi-series chart data/type/grouping table editing/merge/track workflows, direct on-slide cell input, row auto-fit, bounded 1,000-slide navigation and responsive title-bar/table-design regressions, screenshots, six-library packaging and Pages deployment.
-- **Release:** tag-triggered tests, self-contained desktop distributions, browser output, NuGet artifacts and a GitHub Release. Tagged release execution and signing are separate from ordinary build checks.
+- **Release:** runs for `v*` tags or a supplied manual version. It runs the tests, publishes self-contained single-file desktop executables for Windows, macOS and Linux (x64 and arm64), builds the browser output, packs the six libraries with symbols and emits `SHA256SUMS`. Tags attach all assets to a GitHub Release and publish the packages to NuGet.org with [Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) (OIDC, no stored API key) from the protected `nuget` environment. Manual runs are dry runs: they build and upload every asset as workflow artifacts but publish nothing. Signing is not configured.
 
 Read each run's results rather than treating configured coverage as completed qualification. Tests establish behavior for their covered cases, not every PowerPoint file, accessibility standard, GPU, browser or production-scale workload.
 

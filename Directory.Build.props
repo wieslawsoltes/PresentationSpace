@@ -5,17 +5,27 @@
     <LangVersion>latest</LangVersion>
     <Version>0.6.0</Version>
     <Authors>Wiesław Šoltés</Authors>
-    <Company>PresentationSpace</Company>
+    <Company>Wiesław Šoltés</Company>
+    <Copyright>Copyright © 2026 Wiesław Šoltés</Copyright>
     <RepositoryUrl>https://github.com/wieslawsoltes/PresentationSpace</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://wieslawsoltes.github.io/UnoSpace/projects/presentationspace/</PackageProjectUrl>
+    <PackageTags>presentationspace;presentation;slides;pptx;powerpoint;editor;uno-platform;skiasharp;webassembly;desktop</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <DebugType>portable</DebugType>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)README.md')">
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)build/icon.png" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
 </Project>
