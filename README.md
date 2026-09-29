@@ -9,6 +9,8 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 [![Build and test](https://github.com/wieslawsoltes/PresentationSpace/actions/workflows/build.yml/badge.svg)](https://github.com/wieslawsoltes/PresentationSpace/actions/workflows/build.yml)
 [![Browser and Pages](https://github.com/wieslawsoltes/PresentationSpace/actions/workflows/pages.yml/badge.svg)](https://github.com/wieslawsoltes/PresentationSpace/actions/workflows/pages.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Core.svg?label=NuGet)](https://www.nuget.org/packages/PresentationSpace.Core)
+[![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Core.svg)](https://www.nuget.org/packages/PresentationSpace.Core)
 
 [**Open browser editor**](https://wieslawsoltes.github.io/PresentationSpace/) · [Architecture](docs/architecture.md) · [Compatibility](docs/compatibility.md) · [Changelog](CHANGELOG.md) · [Releases](https://github.com/wieslawsoltes/PresentationSpace/releases)
 
@@ -42,6 +44,8 @@ The custom Uno workspace combines a compact title bar, quick-access commands, ta
 | Files | Native `.pspace`, documented PPTX subset, slide PNG and vector PDF export |
 
 The ribbon includes Home, Insert, Draw, Design, Transitions, Animations, Slide Show, Review, View, Shape Format, Table Design and Help, plus the File workspace. Commands use the shared document session. Unsupported cloud features are not simulated.
+
+Select a table and open **Format Shape → Table design & layout**, or search **Edit table data**. Click a cell, Shift+click to extend the selection, or click row/column headers. Apply text with **Apply cell text** or **Ctrl+Enter** before selecting another cell. Structural/style actions apply the current valid text draft. The navigator pages through eight rows and four columns; the slide shows the entire table.
 
 ## Start developing
 
@@ -90,100 +94,247 @@ Every [release](https://github.com/wieslawsoltes/PresentationSpace/releases/late
 
 Extract and run `PresentationSpace` (`PresentationSpace.exe` on Windows). Builds are not code-signed yet: on macOS clear the quarantine flag with `xattr -d com.apple.quarantine PresentationSpace`; on Windows choose **More info → Run anyway** in SmartScreen. Verify downloads against `SHA256SUMS`.
 
-The libraries below are published to [NuGet.org](https://www.nuget.org/packages?q=PresentationSpace), e.g. `dotnet add package PresentationSpace.Editor.Uno`.
+## NuGet packages
 
-## Six independently reusable libraries
+All six libraries are MIT-licensed and published on [NuGet.org](https://www.nuget.org/packages?q=PresentationSpace). `PresentationSpace.Core`, `PresentationSpace.Formats` and `PresentationSpace.Rendering.Skia` target `net10.0` and have no UI-framework dependency (the renderer needs only SkiaSharp). The `*.Uno` packages target `net10.0-desktop` and `net10.0-browserwasm` on Uno Platform 6.7 with the Skia renderer. Every package is versioned together with the app, and symbols ship on NuGet.org as `.snupkg` with SourceLink.
 
-| Package | Responsibility | Dependencies |
-|---|---|---|
-| `PresentationSpace.Core` | Immutable documents, rich-text operations, layouts, tables, chart data/axes, geometry, commands, selection and undo | No UI framework |
-| `PresentationSpace.Formats` | Bounded PPTX ZIP/XML, native chart/table parts and embedded chart workbooks | Core |
-| `PresentationSpace.Rendering.Skia` | Slides, merged/styled tables, six chart types, mixed text, images, thumbnails, selection, PNG/PDF | Core + SkiaSharp |
-| `PresentationSpace.Ribbon.Uno` | Ribbon tabs, overflow scrolling, groups, buttons, compact toggle and Office-style palette | Uno |
-| `PresentationSpace.Controls.Uno` | Viewport, filmstrip, sorter, inspector, table/chart data editors, notes, splitters, status and slide show | Uno + renderer |
-| `PresentationSpace.Editor.Uno` | Embeddable complete editor and injectable storage contract | Reusable libraries above |
+```sh
+dotnet add package PresentationSpace.Core
+```
 
-`PresentationSpace.App` is the executable host. No library references the app. CI produces six NuGet packages; tagged releases publish them to nuget.org.
+| Package | Version | Downloads | Description |
+|---|---|---|---|
+| [PresentationSpace.Core](https://www.nuget.org/packages/PresentationSpace.Core) | [![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Core.svg)](https://www.nuget.org/packages/PresentationSpace.Core) | [![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Core.svg)](https://www.nuget.org/packages/PresentationSpace.Core) | Immutable presentation model, rich text, tables, charts, geometry, editing commands and transactional undo, with no UI dependency |
+| [PresentationSpace.Formats](https://www.nuget.org/packages/PresentationSpace.Formats) | [![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Formats.svg)](https://www.nuget.org/packages/PresentationSpace.Formats) | [![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Formats.svg)](https://www.nuget.org/packages/PresentationSpace.Formats) | Bounded, dependency-free PPTX import and editable PowerPoint export, including native tables, charts and embedded chart workbooks |
+| [PresentationSpace.Rendering.Skia](https://www.nuget.org/packages/PresentationSpace.Rendering.Skia) | [![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Rendering.Skia.svg)](https://www.nuget.org/packages/PresentationSpace.Rendering.Skia) | [![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Rendering.Skia.svg)](https://www.nuget.org/packages/PresentationSpace.Rendering.Skia) | SkiaSharp slide, table and chart rendering, thumbnails, PNG and vector PDF export |
+| [PresentationSpace.Ribbon.Uno](https://www.nuget.org/packages/PresentationSpace.Ribbon.Uno) | [![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Ribbon.Uno.svg)](https://www.nuget.org/packages/PresentationSpace.Ribbon.Uno) | [![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Ribbon.Uno.svg)](https://www.nuget.org/packages/PresentationSpace.Ribbon.Uno) | Office-style ribbon tabs, groups, command buttons, overflow scrolling and a compact toggle switch for Uno Platform |
+| [PresentationSpace.Controls.Uno](https://www.nuget.org/packages/PresentationSpace.Controls.Uno) | [![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Controls.Uno.svg)](https://www.nuget.org/packages/PresentationSpace.Controls.Uno) | [![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Controls.Uno.svg)](https://www.nuget.org/packages/PresentationSpace.Controls.Uno) | Slide viewport, filmstrip, sorter, inspector, table/chart data editors, notes, status bar and slide-show player for Uno Platform |
+| [PresentationSpace.Editor.Uno](https://www.nuget.org/packages/PresentationSpace.Editor.Uno) | [![NuGet](https://img.shields.io/nuget/vpre/PresentationSpace.Editor.Uno.svg)](https://www.nuget.org/packages/PresentationSpace.Editor.Uno) | [![Downloads](https://img.shields.io/nuget/dt/PresentationSpace.Editor.Uno.svg)](https://www.nuget.org/packages/PresentationSpace.Editor.Uno) | Embeddable, complete Office-style presentation editor with pluggable storage for Uno Platform |
 
-### Embed the editor
+Dependencies follow the layers: `Core ← Formats`, `Core ← Rendering.Skia`, `Core + Rendering.Skia + Ribbon.Uno ← Controls.Uno ← Editor.Uno (+ Formats)`. `Ribbon.Uno` depends only on Uno. `PresentationSpace.App` is the executable host; no library references the app.
+
+### PresentationSpace.Core
+
+The document engine: immutable `PresentationDocument`/`Slide`/`SlideShape` records, mixed-style rich text, merged and styled tables, multi-series chart data, layouts, geometry, selection and a transactional `EditorSession` with undo/redo. Use it standalone to generate or transform decks on a server or in tests. No dependencies and no UI requirement.
+
+```sh
+dotnet add package PresentationSpace.Core
+```
+
+**Key types**
+- `EditorSession`: current document, slide and selection; `Insert`, `Apply`, `EditSlide`, `AddSlide`, `Undo`/`Redo`, `Changed` event.
+- `SlideFactory`: `Text(...)` shapes, `Create(layout)` slides and the `Welcome()` sample deck.
+- `RichText`: character-range formatting (`Format`, `Replace`, `Segments`).
+- `TableModel` / `TableSpec`: create, merge/split, insert/delete tracks, style presets and borders (limits: 100 rows, 100 columns, one million characters).
+- `ChartModel` / `ChartSpec` / `ChartTabularData`: six chart kinds, validation and spreadsheet-style copy/paste text.
+- `DocumentSerializer`: native `.pspace` JSON with schema validation.
+
+**Usage**
+
+```csharp
+using PresentationSpace.Core;
+
+var session = new EditorSession(SlideFactory.Welcome());
+session.AddSlide("Title only");
+
+var title = SlideFactory.Text("Hello, slides", 80, 100, 900, 130, 56);
+title = RichText.Format(title, 0, 5, style => style with { Bold = true, Color = "#D35230" });
+session.Insert(title);                 // one undoable transaction
+session.ApplyLayout("Title slide");    // unmatched content is retained
+
+var table = TableModel.Create(rows: 4, columns: 3);
+table = TableModel.SetText(table, 0, 0, "Quarterly results");
+table = TableModel.Merge(table, new TableRange(0, 0, 1, 3));
+table = TableModel.ApplyStyle(table, TableStylePreset.Blue);
+session.Insert(TableModel.Apply(new SlideShape { Name = "Results", Bounds = new(100, 260, 960, 320) }, table));
+
+session.Undo();
+string json = DocumentSerializer.Serialize(session.Document); // native .pspace
+```
+
+`TableModel.Apply` and `ChartModel.Apply` maintain legacy projection fields (`Cells`, `TableColumns`, `Values`, `Labels`); edit the table/chart model rather than those projections. `TableLayout` supplies normalized edges, merge-origin bounds and hit-testing. Sessions are single-thread-affine.
+
+### PresentationSpace.Formats
+
+Bounded PresentationML (PPTX) import and editable PowerPoint export: real text runs, preset shapes, pictures, merged/styled native tables, native multi-series charts with embedded workbooks, notes and basic transitions. ZIP/XML sizes are bounded, DTDs are prohibited and external relationships are never fetched. Depends on Core only; no UI requirement.
+
+```sh
+dotnet add package PresentationSpace.Formats
+```
+
+**Key types**
+- `PptxCodec.Import(byte[])`: returns an `ImportResult` with the `Document` and `Warnings`.
+- `PptxCodec.Export(PresentationDocument)`: returns an `ExportResult` with the `.pptx` `Data` and `Warnings`.
+- `ImportResult` / `ExportResult`: report unsupported content instead of silently dropping it.
+
+**Usage**
+
+```csharp
+using PresentationSpace.Core;
+using PresentationSpace.Formats;
+
+ImportResult imported = PptxCodec.Import(File.ReadAllBytes("deck.pptx"));
+foreach (var warning in imported.Warnings)
+    Console.WriteLine(warning);        // unsupported parts are reported, not silently kept
+
+var session = new EditorSession(imported.Document);
+session.ReplaceText("2025", "2026");
+
+ExportResult exported = PptxCodec.Export(session.Document);
+File.WriteAllBytes("deck-2026.pptx", exported.Data);
+```
+
+Import is not lossless for arbitrary PPTX files, and valid OOXML output does not guarantee visual equivalence. See [Compatibility](docs/compatibility.md).
+
+### PresentationSpace.Rendering.Skia
+
+Draws slides, mixed-style text, images, merged/styled tables and the six chart types to any `SKCanvas`, with picture/scene caching, thumbnails and PNG/vector PDF export. Use it headlessly for exports or inside any Skia-based UI. Depends on Core and SkiaSharp 3.119; headless hosts must also reference the operating system's SkiaSharp native-assets package.
+
+```sh
+dotnet add package PresentationSpace.Rendering.Skia
+```
+
+**Key types**
+- `SlideRenderer`: `Render`, `ExportPng`, `ExportPdf`, `RenderTable`, `RenderChart`, `DrawRichText` and `AutoFitTableRows`.
+- `SlideRenderer.CacheStatistics` / `RenderCacheStatistics`: picture and scene cache counters.
+- `TypefaceRegistry` / `ITypefaceResolver`: register embedded font files and resolve typefaces per `TextStyle`.
+
+**Usage**
+
+```csharp
+using PresentationSpace.Core;
+using PresentationSpace.Rendering.Skia;
+using SkiaSharp;
+
+var document = SlideFactory.Welcome();
+using var renderer = new SlideRenderer();
+File.WriteAllBytes("slide-1.png", renderer.ExportPng(document, document.Slides[0], width: 1920));
+File.WriteAllBytes("deck.pdf", renderer.ExportPdf(document));
+
+// Draw a chart onto any SKCanvas, without a document or editor.
+var chart = new ChartSpec
+{
+    Kind = ChartKind.Line,
+    Title = "Quarterly performance",
+    Categories = ["Q1", "Q2", "Q3"],
+    Series = [new() { Name = "Actual", Color = "#D35230", Values = [10, null, 25] }]
+};
+using var surface = SKSurface.Create(new SKImageInfo(640, 360));
+renderer.RenderChart(surface.Canvas, chart, new RectF(0, 0, 640, 360), new TextStyle());
+```
+
+Renderers are single-thread-affine: use one per concurrent worker and dispose it.
+
+### PresentationSpace.Ribbon.Uno
+
+A self-contained Office-style ribbon for any Uno Platform app: tabs, captioned groups, large/small command buttons, overflow scroll arrows, collapse on double-click and an accessible compact toggle switch. It has no dependency on the presentation engine. Requires Uno Platform.
+
+```sh
+dotnet add package PresentationSpace.Ribbon.Uno
+```
+
+**Key types**
+- `RibbonControl`: `SetTabs`, `SelectTab`, `ToggleCollapsed`, `SelectedTab` and the `TabChanged` event.
+- `RibbonTab(Title, Build)`: a tab whose groups are built on selection.
+- `RibbonGroup(title, params UIElement[] items)` and `RibbonGroup.Column(...)` for stacked small buttons.
+- `RibbonCommandButton(id, label, glyph, action, large, shortcut)`: sets automation name/ID and tooltip.
+- `CompactToggleSwitch` and `OfficePalette` (shared brushes and `Brush(hex)`).
+
+**Usage**
+
+```csharp
+using PresentationSpace.Ribbon.Uno;
+
+var ribbon = new RibbonControl();
+ribbon.SetTabs([
+    new RibbonTab("Home", () => [
+        new RibbonGroup("Clipboard",
+            new RibbonCommandButton("paste", "Paste", "", Paste, shortcut: "Ctrl+V"),
+            RibbonGroup.Column(
+                new RibbonCommandButton("cut", "Cut", "", Cut, large: false),
+                new RibbonCommandButton("copy", "Copy", "", Copy, large: false)))
+    ]),
+    new RibbonTab("View", () => [new RibbonGroup("Zoom", new RibbonCommandButton("fit", "Fit", "", Fit))])
+]);
+ribbon.TabChanged += (_, tab) => System.Diagnostics.Debug.WriteLine($"Selected {tab}");
+myPage.Content = ribbon;
+```
+
+### PresentationSpace.Controls.Uno
+
+The reusable editing surfaces behind the workspace, each bound to a shared `EditorSession`: a Skia slide viewport with selection, handles, snapping and in-place text editing; virtualized filmstrip and sorter; the Format/Selection/Comments inspector; standalone table and chart data editors; notes; status bar; and a slide-show player. Depends on Core, Rendering.Skia, Ribbon.Uno and Uno's Skia canvas; requires Uno Platform.
+
+```sh
+dotnet add package PresentationSpace.Controls.Uno
+```
+
+**Key types**
+- `SlideViewport`: interactive canvas (`Session`, `SetZoom`, `Fit`, `ShowGrid`, `EditText`, `CommitText`).
+- `SlideFilmstrip` / `SlideSorter`: recycled slide navigators (`Session`, `SlideInvoked`).
+- `FormatPane` (`Mode` = `InspectorMode.Format`/`Selection`/`Comments`), `NotesPane`, `PresentationStatusBar`.
+- `TableDataEditor` / `ChartDataEditor`: `SetValue(...)` plus a `ValueChanged` event that emits validated `TableSpec`/`ChartSpec` snapshots.
+- `PresentationPlayer`: full-screen show with `Start(document, from)`, `Next`, `Previous`, `Close`.
+
+**Usage**
+
+```csharp
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using PresentationSpace.Controls.Uno;
+using PresentationSpace.Core;
+
+var session = new EditorSession(SlideFactory.Welcome());
+var filmstrip = new SlideFilmstrip { Session = session };
+var viewport = new SlideViewport { Session = session };
+
+var root = new Grid();
+root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+root.ColumnDefinitions.Add(new ColumnDefinition());
+Grid.SetColumn(viewport, 1);
+root.Children.Add(filmstrip);
+root.Children.Add(viewport);
+window.Content = root;
+
+// Standalone chart data editor: apply each validated snapshot to the selected shape.
+var chartEditor = new ChartDataEditor();
+chartEditor.SetValue(new ChartSpec { Categories = ["Q1", "Q2"], Series = [new() { Values = [4, 7] }] });
+chartEditor.ValueChanged += (_, chart) => session.Apply("Edit chart", shape => ChartModel.Apply(shape, chart));
+```
+
+### PresentationSpace.Editor.Uno
+
+The complete workspace in one control: title bar, quick access, ribbon, filmstrip, canvas, notes, inspector panes, sorter, slide show, command search (**Alt+Q**), PPTX/PNG/PDF commands and device-local recovery. Embed it in any Uno app and supply storage through `IWorkspaceStorage`. Depends on Controls.Uno and Formats; requires Uno Platform.
+
+```sh
+dotnet add package PresentationSpace.Editor.Uno
+```
+
+**Key types**
+- `PresentationEditor(EditorSession?, IWorkspaceStorage?)`: the embeddable `UserControl`; exposes `Session`, `Viewport`, `Ribbon` and `Storage`.
+- `PresentationEditor.RestoreRecoveryAsync()`, `StartShow(fromBeginning)`, `ShowSorter()`, `ShowNormal()`, `ShowInspector(mode)`.
+- `IWorkspaceStorage`: host pickers, saves and recovery (`OpenAsync`, `SaveAsync`, `ReadRecoveryAsync`, `WriteRecoveryAsync`).
+- `WorkspaceFile(Name, Data)`: a file returned from `OpenAsync`.
+
+**Usage**
 
 ```csharp
 using PresentationSpace.Core;
 using PresentationSpace.Editor.Uno;
 
-var session = new EditorSession(SlideFactory.Welcome());
-var editor = new PresentationEditor(session, myStorageService);
-myPage.Content = editor;
-```
+var editor = new PresentationEditor(new EditorSession(SlideFactory.Welcome()), new HostStorage());
+window.Content = editor;               // or a Page's Content
+await editor.RestoreRecoveryAsync();
 
-Implement `IWorkspaceStorage` for your host's pickers, saves and recovery. Return `false` on canceled saves. The app supplies a device-local Uno implementation.
-
-### Use the engine without Uno
-
-```csharp
-using PresentationSpace.Core;
-using PresentationSpace.Formats;
-using PresentationSpace.Rendering.Skia;
-
-var session = new EditorSession();
-var title = SlideFactory.Text("Hello, slides", 80, 100, 900, 130, 56);
-title = RichText.Format(title, 0, 5,
-    style => style with { Bold = true, Color = "#D35230" });
-session.Insert(title);
-session.ApplyLayout("Title only"); // Unmatched content is retained.
-
-using var renderer = new SlideRenderer();
-byte[] png = renderer.ExportPng(session.Document, session.CurrentSlide);
-ExportResult pptx = PptxCodec.Export(session.Document);
-// Display pptx.Warnings; valid OOXML is not a guarantee of visual equivalence.
-```
-
-Headless hosts must provide the operating system's Skia native-assets package. Sessions and renderers are single-thread-affine; use one renderer per concurrent worker and dispose it.
-
-### Use charts independently
-
-```csharp
-var data = new ChartSpec
+sealed class HostStorage : IWorkspaceStorage
 {
-    Kind = ChartKind.Line,
-    Title = "Quarterly performance",
-    Categories = ["Q1", "Q2", "Q3"],
-    Series = [
-        new() { Name = "Actual", Color = "#D35230", Values = [10, null, 25] },
-        new() { Name = "Plan", Color = "#4472C4", Values = [15, 18, 22] }
-    ]
-};
-var shape = ChartModel.Apply(new SlideShape
-{
-    Name = "Performance chart", Bounds = new(100, 180, 960, 540)
-}, data);
-session.Insert(shape);
-
-// Or draw directly on an existing Skia canvas, without an editor or document.
-renderer.RenderChart(canvas, data, new RectF(0, 0, 640, 360), new TextStyle());
+    public Task<WorkspaceFile?> OpenAsync(IReadOnlyList<string> extensions) => Task.FromResult<WorkspaceFile?>(null); // show a picker
+    public Task<bool> SaveAsync(string suggestedName, byte[] data, string mimeType) => Task.FromResult(false);      // false when canceled
+    public Task<string?> ReadRecoveryAsync() => Task.FromResult<string?>(null);
+    public Task WriteRecoveryAsync(string json) => Task.CompletedTask;
+}
 ```
 
-`ChartDataEditor.SetValue(data)` loads the standalone Uno control; `ValueChanged` emits a validated `ChartSpec`. `ChartTabularData.Format/Parse` support spreadsheet copy/paste. `ChartModel.Apply` maintains legacy projection fields; use the chart API rather than editing those projections directly. Existing Shape Fill commands recolor the first series.
-
-### Use tables independently
-
-```csharp
-var table = TableModel.Create(rows: 4, columns: 3);
-table = TableModel.SetText(table, 0, 0, "Quarterly results");
-table = TableModel.Merge(table, new TableRange(0, 0, 1, 3));
-table = TableModel.EditCells(table, new TableRange(1, 0, 3, 3),
-    cell => cell with { Fill = "#EAF1FA", MarginLeft = 12 });
-var shape = TableModel.Apply(new SlideShape
-{
-    Name = "Results table", Bounds = new(100, 180, 960, 400)
-}, table);
-session.Insert(shape);
-renderer.RenderTable(canvas, table, new RectF(0, 0, 640, 300));
-```
-
-`TableDataEditor.SetValue(table)` loads the standalone Uno control; `ValueChanged` emits validated snapshots. `TableLayout` supplies normalized edges, merge-origin bounds and grid lookup. `TableModel.Apply` maintains compatibility projections; edit the table model rather than `Cells`/`TableColumns` directly. Limits are 100 rows, 100 columns and one million text characters per table.
-
-Select a table and open **Format Shape → Table design & layout**, or search **Edit table data**. Click a cell, Shift+click to extend the selection, or click row/column headers. Apply text with **Apply cell text** or **Ctrl+Enter** before selecting another cell. Structural/style actions apply the current valid text draft. The navigator pages through eight rows and four columns; the slide shows the entire table.
+Return `false` from `SaveAsync` when the user cancels; recovery must not imply that a portable file was saved. The app supplies a device-local Uno implementation (`LocalWorkspaceStorage`).
 
 ## Files, privacy and recovery
 
