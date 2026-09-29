@@ -1,0 +1,42 @@
+name: Apply paragraph inheritance review
+on:
+  push:
+    branches: [work/text-body-layout-0.8]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'paragraph-review:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply reviewed source correction
+        run: |
+          set -euo pipefail
+          git diff --exit-code b3515feddaa2e82f7f39bbe20531c06f4869bc4a HEAD -- src CHANGELOG.md
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/PresentationSpace.Formats/PptxCodec.cs')
+          s = p.read_text()
+          before = 'var paragraph=body?.Element(A+"p")?.Element(A+"pPr");var run=paragraph?.Element(A+"defRPr")??body?.Element(A+"lstStyle")?.Element(A+"lvl1pPr")?.Element(A+"defRPr")'
+          after = 'var paragraph=body?.Element(A+"lstStyle")?.Element(A+"lvl1pPr");var run=paragraph?.Element(A+"defRPr")'
+          assert s.count(before) == 1
+          s = s.replace(before, after)
+          line = next(line for line in s.splitlines() if 'var body=node.Element' in line)
+          s = s.replace(line, line[:line.index(';string text=')] + ';string text="";')
+          before = '                var shape=new SlideShape{Kind=kind,Name=name,'
+          after = '                // A sibling paragraph is never a source of inherited body defaults.\n                style=ReadParagraphStyle(paragraph,style);\n' + before
+          assert s.count(before) == 1
+          p.write_text(s.replace(before, after))
+          p = Path('CHANGELOG.md'); s = p.read_text()
+          s = s.replace('## 0.8.0 — Text-body and paragraph layout\n', '## 0.8.0 — Text-body and paragraph layout\n\n- Isolate imported paragraph defaults from sibling paragraphs, honor body-level default spacing/styles, and avoid redundant pre-concatenation of imported text.\n')
+          p.write_text(s)
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/PresentationSpace.Formats/PptxCodec.cs CHANGELOG.md
+          git commit -m 'fix: resolve imported paragraph defaults without inheriting sibling formatting'
+          git push origin HEAD:work/text-body-layout-0.8
