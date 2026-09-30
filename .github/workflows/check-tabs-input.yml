@@ -1,0 +1,48 @@
+name: Verify native multiline input
+on:
+  push:
+    branches: [work/verify-custom-tabs-input]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-distribution
+          run-id: 36745280083
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts/site
+      - name: Install browser tools
+        run: |
+          python3 -m pip install playwright==1.55.0 Pillow==11.3.0
+          python3 -m playwright install --with-deps chromium
+      - name: Exercise actual input with detach synchronization
+        run: |
+          mkdir -p artifacts/serve
+          ln -s "$PWD/artifacts/site" artifacts/serve/PresentationSpace
+          python3 -m http.server 8080 --directory artifacts/serve > artifacts/server.log 2>&1 &
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/browser-performance.py')
+          text = path.read_text()
+          old = "        page.keyboard.press('Escape')\n        attr('data-table-text-length', before - old_length + len('Canvas heading\\nSecond line'))"
+          new = "        page.keyboard.press('Escape')\n        page.wait_for_function(\"() => document.activeElement?.tagName !== 'TEXTAREA' && document.documentElement.getAttribute('data-focus-id') === 'slide-canvas:SlideViewport'\")\n        page.evaluate(\"() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))\")\n        attr('data-table-text-length', before - old_length + len('Canvas heading\\nSecond line'))"
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, new))
+          PY
+          result=0
+          python3 tools/browser-performance.py || result=1
+          python3 tools/browser-tabs.py || result=1
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-input-check
+          path: |
+            artifacts/screenshots
+            artifacts/server.log
