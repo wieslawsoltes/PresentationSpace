@@ -16,7 +16,17 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.8 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.9 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+
+## What is new in 0.9
+
+**Custom tab-aligned text.** Author independent Left, Center, Right and Decimal tab stops for each paragraph. Tab fields are aligned using actual shaped glyph advances, including mixed fonts and sizes. Decimal alignment uses the first period; a field without one is right-aligned. The shared renderer serves slide editing, previews, slide show, table text and PNG/PDF output. Existing regular tab intervals remain the fallback after the last custom stop.
+
+**Reusable authoring and native interchange.** Select a text-bearing shape and use **Shape Format → Custom Tabs** or **Alt+Q → Edit custom tab stops**. Enter one increasing `position alignment` per line, such as `130 Decimal` then `250 Right`. **Ctrl+Enter** in this field, or **Apply text layout**, commits the complete valid layout draft as one undoable edit; invalid drafts leave the document unchanged. Positions are 96-DPI slide units from the text content's left edge, not typographic points. This pane applies paragraph settings to the whole shape while preserving character styles. Selection-aware formatting commands and model ranges can define distinct paragraph stops.
+
+**Open custom tabs sample** appends an editable aligned-fields example. Stops scale with presentation resizing and round-trip through native DrawingML `a:tabLst`/`a:tab`. New native documents using custom stops require schema 6; schemas 1–5 remain readable. Stale delayed inspector text, alternative-text and numeric commits cannot overwrite a newly selected or replaced object. The text engine retains its private drawing paint instead of allocating one per repeated draw; benchmarks include cold and warm cases rather than claiming a universal speed-up.
+
+Custom stops support horizontal left-to-right tab fields, not complete Office tab semantics, RTL tab layout or tab leaders. Overlapping aligned fields are clamped at the current text position; stops outside the content box are clipped, and overwide fields can wrap. See [Compatibility](docs/compatibility.md#09-custom-tab-stops) for precise boundaries.
 
 ## What is new in 0.8
 

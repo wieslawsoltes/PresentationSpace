@@ -14,7 +14,8 @@ public static class DocumentLayout
         var result = factor == 1 ? style : style with { FontSize = size,
             LineSpacingPoints = style.LineSpacingPoints * factor, SpaceBefore = style.SpaceBefore * factor, SpaceAfter = style.SpaceAfter * factor,
             ParagraphLeftMargin = style.ParagraphLeftMargin * factor, ParagraphRightMargin = style.ParagraphRightMargin * factor,
-            ParagraphIndent = style.ParagraphIndent * factor, DefaultTabSize = style.DefaultTabSize * factor };
+            ParagraphIndent = style.ParagraphIndent * factor, DefaultTabSize = style.DefaultTabSize * factor,
+            TabStops = TextTabStops.Scale(style.TabStops, factor) };
         TextFlow.ValidateStyle(result); return result;
     }
 

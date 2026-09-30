@@ -110,7 +110,8 @@ public static class RichText
         ParagraphLeftMargin = old.ParagraphLeftMargin == value.ParagraphLeftMargin ? style.ParagraphLeftMargin : value.ParagraphLeftMargin,
         ParagraphRightMargin = old.ParagraphRightMargin == value.ParagraphRightMargin ? style.ParagraphRightMargin : value.ParagraphRightMargin,
         ParagraphIndent = old.ParagraphIndent == value.ParagraphIndent ? style.ParagraphIndent : value.ParagraphIndent,
-        DefaultTabSize = old.DefaultTabSize == value.DefaultTabSize ? style.DefaultTabSize : value.DefaultTabSize
+        DefaultTabSize = old.DefaultTabSize == value.DefaultTabSize ? style.DefaultTabSize : value.DefaultTabSize,
+        TabStops = old.TabStops == value.TabStops ? style.TabStops : value.TabStops
     };
 
     public static Slide Reconcile(Slide before, Slide after)

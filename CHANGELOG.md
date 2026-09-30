@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — Custom tab alignment and safe inspector commits
+
+- Add immutable Left/Center/Right/Decimal tab stops, validated invariant authoring and actual glyph-measured field placement.
+- Preserve custom tabs in character/paragraph edits, presentation resizing, native DrawingML and schema-6 documents, with schemas 1–5 readable.
+- Expose immutable tab-layout diagnostics, regular-stop fallback and explicit mixed-direction limitations.
+- Add a reusable custom-tabs editor and append-only editable sample, with real-input browser and independent schema/rendering regressions.
+- Reuse the layout engine's private drawing paint, retaining native resource ownership and canvas-state restoration.
+- Guard delayed raw-text, alternative-text and numeric inspector changes against stale selections/snapshots, locked targets and reentrant duplicate commits.
+
+
 ## 0.8.0 — Text-body and paragraph layout
 
 - Isolate imported paragraph defaults from sibling paragraphs, honor body-level default spacing/styles, and avoid redundant pre-concatenation of imported text.

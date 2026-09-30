@@ -55,7 +55,7 @@ public static class TextBoxModel
             Alignment = paragraph.Alignment, SpaceBefore = paragraph.SpaceBefore, SpaceAfter = paragraph.SpaceAfter,
             ParagraphLeftMargin = paragraph.ParagraphLeftMargin, ParagraphRightMargin = paragraph.ParagraphRightMargin,
             ParagraphIndent = paragraph.ParagraphIndent, DefaultTabSize = paragraph.DefaultTabSize,
-            LineSpacing = paragraph.LineSpacing, LineSpacingPoints = paragraph.LineSpacingPoints
+            LineSpacing = paragraph.LineSpacing, LineSpacingPoints = paragraph.LineSpacingPoints, TabStops = paragraph.TabStops
         };
         return shape with { TextBox = box, TextStyle = Apply(shape.TextStyle),
             TextRanges = shape.TextRanges.Select(range => range with { Style = Apply(range.Style) }).ToImmutableArray() };

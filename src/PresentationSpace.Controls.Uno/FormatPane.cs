@@ -14,6 +14,7 @@ public sealed class FormatPane : SessionControl
     private readonly TextBlock _title=OfficePalette.Text("Format Shape",16,true);
     private TextLayoutEditor? _textLayoutEditor;
     public void FocusTextLayout() => _textLayoutEditor?.FocusFirstField();
+    public void FocusTabStops() => _textLayoutEditor?.FocusTabStops();
     private TableDataEditor? _tableEditor;
     private bool _committingTable;
     public TableDataEditor? TableEditor => _tableEditor;
@@ -51,7 +52,9 @@ public sealed class FormatPane : SessionControl
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
             Hint(shape.Name+(s.Selection.Count>1?$" · {s.Selection.Count} objects selected":""));
             Section("Accessibility");var alternative=new TextBox{Header="Alternative text",Text=shape.AlternativeText,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,FontSize=12};
-            alternative.LostFocus+=(_,_)=>{if(alternative.Text!=s.PrimaryShape?.AlternativeText)s.Apply("Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
+            alternative.IsEnabled=!shape.Locked;
+            var alternativeTarget=SelectionEditSnapshot.Capture(s);
+            alternative.LostFocus+=(_,_)=>{if(!_building&&alternative.Text!=shape.AlternativeText)alternativeTarget.TryApply(s,"Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
             if(shape.Kind==ShapeKind.Table)
             {
                 Section("Table design & layout");
@@ -103,7 +106,7 @@ public sealed class FormatPane : SessionControl
                     };
                     _body.Children.Add(_textLayoutEditor);
                 }
-                Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.LostFocus+=(_,_)=>{if(text.Text!=s.PrimaryShape?.Text)s.Apply("Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
+                Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.IsEnabled=!shape.Locked;var textTarget=SelectionEditSnapshot.Capture(s);text.LostFocus+=(_,_)=>{if(!_building&&text.Text!=shape.Text)textTarget.TryApply(s,"Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
                 Number("Font size",shape.TextStyle.FontSize,v=>s.Apply("Font size",x=>x with{TextStyle=x.TextStyle with{FontSize=Math.Clamp(v,1,512)}}));Palette(color=>s.Apply("Text color",x=>x with{TextStyle=x.TextStyle with{Color=color}}));
                 Choice("Vertical alignment",Enum.GetNames<Core.VerticalAlignment>(),shape.TextStyle.VerticalAlignment.ToString(),value=>s.Apply("Text vertical alignment",x=>x with{TextStyle=x.TextStyle with{VerticalAlignment=Enum.Parse<Core.VerticalAlignment>(value)}}));
             }
@@ -140,10 +143,13 @@ public sealed class FormatPane : SessionControl
     private void Palette(Action<string> selected){var p=new ColorPalette();p.ColorSelected+=(_,color)=>selected(color);_body.Children.Add(p);}
     private static Button Button(string label,Action action){var b=new Button{Content=new TextBlock{Text=label,TextTrimming=TextTrimming.CharacterEllipsis},MinWidth=0,MinHeight=0,FontSize=11,Padding=new(7,5,7,5),HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Left};Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b,label);b.Click+=(_,_)=>action();return b;}
     private void ActionButton(string label,Action action)=>_body.Children.Add(Button(label,action));
-    private static StackPanel Numeric(string name,float value,Action<float> changed)
+    private StackPanel Numeric(string name,float value,Action<float> changed)
     {
         var p=new StackPanel{Spacing=3};p.Children.Add(OfficePalette.Text(name,10));var box=new TextBox{Text=value.ToString("0.##",CultureInfo.InvariantCulture),FontSize=12,MinWidth=90,Padding=new(7,4,7,4)};
-        box.LostFocus+=(_,_)=>{if(float.TryParse(box.Text,NumberStyles.Float,CultureInfo.InvariantCulture,out var f)&&float.IsFinite(f)&&Math.Abs(f-value)>.001f)changed(Math.Clamp(f,-100000,100000));};p.Children.Add(box);return p;
+        var target=Session is {} session?SelectionEditSnapshot.Capture(session):null;
+        box.IsEnabled=Session?.PrimaryShape?.Locked!=true;
+        bool submitted=false;
+        box.LostFocus+=(_,_)=>{if(!_building&&!submitted&&Session is {} current&&target?.IsCurrent(current)==true&&float.TryParse(box.Text,NumberStyles.Float,CultureInfo.InvariantCulture,out var f)&&float.IsFinite(f)&&Math.Abs(f-value)>.001f){submitted=true;changed(Math.Clamp(f,-100000,100000));}};p.Children.Add(box);return p;
     }
     private void Number(string label,float value,Action<float> changed)=>_body.Children.Add(Numeric(label,value,changed));
     private void NumericPair(string label,float value,Action<float> changed,string label2,float value2,Action<float> changed2){var p=new Grid{ColumnSpacing=9,ColumnDefinitions={new(){Width=new GridLength(1,GridUnitType.Star)},new(){Width=new GridLength(1,GridUnitType.Star)}}};p.Children.Add(Numeric(label,value,changed));var second=Numeric(label2,value2,changed2);Grid.SetColumn(second,1);p.Children.Add(second);_body.Children.Add(p);}

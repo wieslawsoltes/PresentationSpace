@@ -98,7 +98,8 @@ public sealed partial class PresentationEditor
         yield return new("Insert Shapes",Menu("format-shapes","Shapes  ⌄","\uE91B",ShapeActions()),Cmd("format-text","Text Box","\uE8D2",()=>Insert(ShapeKind.Text)));
         yield return new("Shape Styles",Colors("format-fill","Shape Fill","\uE790",color=>Session.Apply("Shape fill",s=>s with{Fill=color}),true),Colors("format-outline","Outline","\uE70F",color=>Session.Apply("Shape outline",s=>s with{Stroke=color}),true));
         yield return new("Arrange",Menu("format-arrange","Arrange  ⌄","\uE8A1",ArrangeActions()),Cmd("rotate-right","Rotate\nRight 90°","\uE7AD",()=>Session.Apply("Rotate right",s=>s with{Rotation=(s.Rotation+90)%360})));
-        yield return new("Text body", Cmd("text-layout-pane", "Text Box\nLayout", "\uE8D2", OpenTextBodyEditor));
+        yield return new("Text body", Cmd("text-layout-pane", "Text Box\nLayout", "\uE8D2", () => OpenTextBodyEditor()),
+            Cmd("custom-tab-pane", "Custom\nTabs", "\uE8A4", () => OpenTextBodyEditor(true)));
         yield return new("Text layout", Cmd("text-shrink-fit", "Shrink Text\nto Fit", "\uE8D2", () => FitSelectedText(false)), Cmd("text-shape-fit", "Resize Shape\nto Text", "\uE740", () => FitSelectedText(true)));
         yield return new("Size",Cmd("format-size","Size and\nPosition","\uE740",()=>ShowInspector(InspectorMode.Format)));
     }

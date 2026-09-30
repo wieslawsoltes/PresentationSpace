@@ -8,7 +8,7 @@ using PresentationSpace.Ribbon.Uno;
 namespace PresentationSpace.Controls.Uno;
 
 /// <summary>Session-independent, explicit-apply text-box and whole-object paragraph editor.</summary>
-public sealed class TextLayoutEditor : UserControl
+public sealed partial class TextLayoutEditor : UserControl
 {
     private readonly StackPanel _body = new() { Spacing = 8 };
     private readonly Dictionary<string, TextBox> _fields = [];
@@ -31,6 +31,7 @@ public sealed class TextLayoutEditor : UserControl
         Pair("Left indent", "indent-left", "Right indent", "indent-right");
         Pair("First line / marker", "first", "Tab interval", "tab");
         Pair("Line multiple", "multiple", "Exact line advance", "exact");
+        BuildTabsEditor();
         var apply = new Button { Content = "Apply text layout", MinWidth = 0, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Stretch };
         AutomationProperties.SetAutomationId(apply, "text-layout-apply"); apply.Click += (_, _) => Apply();
         _body.Children.Add(apply); _body.Children.Add(_error);
@@ -57,6 +58,7 @@ public sealed class TextLayoutEditor : UserControl
         Set("indent-right", style.ParagraphRightMargin); Set("first", style.ParagraphIndent); Set("tab", style.DefaultTabSize);
         Set("multiple", style.LineSpacing); Set("exact", style.LineSpacingPoints);
         _wrap.IsChecked = box.Wrap; _alignment.SelectedItem = style.Alignment.ToString(); _error.Text = "";
+        _tabs.Text = TextTabStops.Format(style.TabStops);
     }
     public void FocusFirstField() { _fields["left"].Focus(FocusState.Programmatic); _fields["left"].SelectAll(); }
     public bool Apply()
@@ -78,7 +80,7 @@ public sealed class TextLayoutEditor : UserControl
                 ParagraphLeftMargin = Read("indent-left", true), ParagraphRightMargin = Read("indent-right")!.Value,
                 ParagraphIndent = Read("first", true), DefaultTabSize = Read("tab")!.Value,
                 LineSpacing = Read("multiple")!.Value, LineSpacingPoints = Read("exact", true),
-                Alignment = Enum.Parse<ParagraphAlignment>((string)_alignment.SelectedItem) };
+                Alignment = Enum.Parse<ParagraphAlignment>((string)_alignment.SelectedItem), TabStops = TextTabStops.Parse(_tabs.Text) };
             TextBoxModel.Validate(box); TextFlow.ValidateStyle(style);
             var next = TextBoxModel.ApplyLayout(source, box, style);
             ValueChanged?.Invoke(this, next); _source = next; _error.Text = ""; return true;

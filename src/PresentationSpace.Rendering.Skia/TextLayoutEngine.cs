@@ -17,8 +17,15 @@ public sealed record TextLineMetrics(int Start, int Length, float Width, float H
     public bool Justified { get; init; }
     public bool ParagraphEnd { get; init; }
 }
+/// <summary>Observed tab-field placement in a visual line, in coordinates relative to the content box.</summary>
+public readonly record struct TextTabMetrics(int SourceIndex, int LineIndex, float Stop, float FieldStart, float FieldEnd,
+    TextTabAlignment Alignment, bool Custom, bool Clamped);
 public sealed record TextLayoutMetrics(float Width, float Height, int GlyphCount,
-    ImmutableArray<TextLineMetrics> Lines, bool HasMixedDirection);
+    ImmutableArray<TextLineMetrics> Lines, bool HasMixedDirection)
+{
+    public ImmutableArray<TextTabMetrics> Tabs { get; init; } = [];
+    public bool HasUnsupportedTabDirection { get; init; }
+}
 public readonly record struct TextLayoutCacheStatistics(long Hits, long Misses, int Entries, long ApproximateBytes);
 
 /// <summary>
@@ -50,7 +57,7 @@ public sealed class TextLayoutEngine : IDisposable
     private sealed record FontSection(int Start, int End, NativeFont Font);
     private sealed record ShapedRun(SKShaper.Result Glyphs, float[] Advances, bool Rtl);
     private sealed record GlyphSpan(NativeFont Font, int Start, SKShaper.Result Glyphs, float[] Advances, TextStyle[] Styles, bool Rtl);
-    private sealed record Piece(int Start, int Length, List<GlyphSpan> Spans, float Width, TextStyle Style, bool Space = false);
+    private sealed record Piece(int Start, int Length, List<GlyphSpan> Spans, float Width, TextStyle Style, bool Space = false, TextTabPlacement? Tab = null);
     private sealed record DrawRun(SKTextBlob Blob, SKColor Color, float X, float Y, float UnderlineStart, float UnderlineWidth, float UnderlineY, float UnderlineThickness);
     private sealed class Entry(Key key, TextLayoutMetrics metrics, List<DrawRun> runs, long bytes) : IDisposable
     {
@@ -65,6 +72,7 @@ public sealed class TextLayoutEngine : IDisposable
     private ITypefaceResolver? _observedResolver;
     private long _observedVersion = -1, _bytes, _hits, _misses;
     private bool _disposed;
+    private SKPaint? _paint;
     public ITypefaceResolver? TypefaceResolver { get; set; }
     public int MaximumCachedLayouts { get; set; } = 256;
     /// <summary>Conservative retained-text/glyph estimate, not an exact native-memory limit.</summary>
@@ -87,6 +95,7 @@ public sealed class TextLayoutEngine : IDisposable
     /// <summary>Draw with explicit text-body insets and wrapping. The inset content rectangle is clipped without replacing the host clip.</summary>
     public void Draw(SKCanvas canvas, string text, TextStyle style, RectF bounds, TextBoxSpec box, ImmutableArray<TextRangeStyle> ranges = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(canvas); TextBoxModel.Validate(box);
         if (!float.IsFinite(bounds.X) || !float.IsFinite(bounds.Y) || !float.IsFinite(bounds.Right) || !float.IsFinite(bounds.Bottom) ||
             bounds.Width <= 0 || bounds.Height <= 0) throw new ArgumentOutOfRangeException(nameof(bounds));
@@ -101,7 +110,9 @@ public sealed class TextLayoutEngine : IDisposable
             try
             {
                 canvas.ClipRect(new(content.X, content.Y, content.Right, content.Bottom));
-                using var paint = new SKPaint { IsAntialias = true };
+                // The engine is single-thread-affine; this private paint does not escape.
+                // Reuse avoids a managed/native paint allocation on every warm draw.
+                var paint = _paint ??= new SKPaint { IsAntialias = true };
                 foreach (var run in entry.Runs)
                 {
                     paint.Color = run.Color;
@@ -121,7 +132,7 @@ public sealed class TextLayoutEngine : IDisposable
         foreach (var entry in _lru) entry.Dispose();
         _entries.Clear(); _lru.Clear(); _bytes = 0;
     }
-    public void Dispose() { if (_disposed) return; Clear(); _disposed = true; }
+    public void Dispose() { if (_disposed) return; Clear(); _paint?.Dispose(); _paint = null; _disposed = true; }
     private void Trim()
     {
         while (_lru.First is { } first && (_entries.Count > Math.Max(0, MaximumCachedLayouts) || _bytes > Math.Max(0, CacheBudget)))
@@ -166,7 +177,8 @@ public sealed class TextLayoutEngine : IDisposable
         var draw = new List<DrawRun>();
         var metrics = ImmutableArray.CreateBuilder<TextLineMetrics>();
         int glyphCount = 0;
-        bool mixed = false;
+        bool mixed = false, unsupportedTabDirection = false;
+        ImmutableArray<TextTabMetrics>.Builder? tabMetrics = null;
         NativeFont Font(TextStyle style)
         {
             var fontKey = new FontKey(style.FontFamily, style.FontSize, style.Bold, style.Italic);
@@ -288,6 +300,40 @@ public sealed class TextLayoutEngine : IDisposable
                 x += result.Width;
             }
         }
+        // Only aligned custom fields need look-ahead. Reuse those same shaped pieces
+        // when they are laid out, and release the field dictionary at the next delimiter.
+        Dictionary<int, Piece>? preparedField = null;
+        float DecimalPosition(Piece piece, int sourceOffset)
+        {
+            float x = 0;
+            foreach (var span in piece.Spans)
+            {
+                var glyphs = span.Glyphs;
+                for (int g = 0; g < glyphs.Clusters.Length; g++)
+                    if (span.Start + glyphs.Clusters[g] >= sourceOffset) return x + glyphs.Points[g].X;
+                x += glyphs.Width;
+            }
+            return piece.Width;
+        }
+        (float Width, float? Decimal) PrepareField(ImmutableArray<TextToken> tokens, int index)
+        {
+            preparedField = new();
+            float width = 0, trailing = 0;
+            float? decimalPosition = null;
+            for (int i = index + 1; i < tokens.Length; i++)
+            {
+                var token = tokens[i];
+                if (token.Kind is TextTokenKind.Tab or TextTokenKind.ParagraphBreak or TextTokenKind.LineBreak) break;
+                if (token.Kind == TextTokenKind.Opportunity) continue;
+                var piece = Shape(token.Start, token.Length, token.Kind == TextTokenKind.Space);
+                preparedField.Add(token.Start, piece);
+                int dot = key.Text.AsSpan(token.Start, token.Length).IndexOf('.');
+                if (dot >= 0 && decimalPosition is null) decimalPosition = width + DecimalPosition(piece, token.Start + dot);
+                width += piece.Width;
+                trailing = piece.Space ? trailing + piece.Width : 0;
+            }
+            return (Math.Max(0, width - trailing), decimalPosition);
+        }
         var pieces = new List<Piece>();
         var paragraphStyle = key.Style;
         Piece? bullet = null;
@@ -307,7 +353,7 @@ public sealed class TextLayoutEngine : IDisposable
         void Finish(int end, bool paragraphEnd = false, bool automatic = false)
         {
             // Exclude trailing breaking spaces from alignment, while keeping their source indexes.
-            while (pieces.Count > 0 && pieces[^1].Space) { usedWidth -= pieces[^1].Width; pieces.RemoveAt(pieces.Count - 1); }
+            while (pieces.Count > 0 && pieces[^1].Space && pieces[^1].Tab is not { Custom: true }) { usedWidth -= pieces[^1].Width; pieces.RemoveAt(pieces.Count - 1); }
             usedWidth = Math.Max(0, usedWidth);
             float ascent = 0, descent = 0, leading = 0, size = 0;
             void Include(TextStyle style)
@@ -324,7 +370,11 @@ public sealed class TextLayoutEngine : IDisposable
             float baseline = y + ascent + Math.Max(0, height - ink) / 2;
             float indent = TextIndent(), available = Available();
             float free = Math.Max(0, available - usedWidth);
-            float align = paragraphStyle.Alignment switch { ParagraphAlignment.Center => free / 2, ParagraphAlignment.Right => free, _ => 0 };
+            bool customTabs = pieces.Any(p => p.Tab is { Custom: true });
+            unsupportedTabDirection |= customTabs && (paragraphRtl || sawRtl);
+            // Explicit stops are absolute content coordinates, not subject to a second
+            // whole-line alignment translation. Tabbed lines are never justified.
+            float align = customTabs ? 0 : paragraphStyle.Alignment switch { ParagraphAlignment.Center => free / 2, ParagraphAlignment.Right => free, _ => 0 };
             int spaces = 0;
             bool eligible = automatic && paragraphStyle.Alignment == ParagraphAlignment.Justify && !paragraphRtl;
             if (eligible)
@@ -346,13 +396,22 @@ public sealed class TextLayoutEngine : IDisposable
             }
             float x = align + (paragraphRtl && bullet is not null ? 0 : indent), left = x;
             bool afterWord = false;
+            TextTabMetrics? currentTab = null;
             for (int i = 0; i < pieces.Count; i++)
             {
                 var piece = pieces[paragraphRtl ? pieces.Count - 1 - i : i];
+                if (piece.Tab is { } tab)
+                {
+                    tabMetrics ??= ImmutableArray.CreateBuilder<TextTabMetrics>();
+                    if (currentTab is { } prior) tabMetrics.Add(prior with { FieldEnd = x });
+                    currentTab = new(piece.Start, metrics.Count, tab.Stop, x + piece.Width, x + piece.Width,
+                        tab.Alignment, tab.Custom, tab.Clamped);
+                }
                 Emit(piece, x, baseline); x += piece.Width;
                 if (!piece.Space) afterWord = true;
                 else if (afterWord && extra > 0) x += extra * piece.Length;
             }
+            if (currentTab is { } lastTab) tabMetrics!.Add(lastTab with { FieldEnd = x });
             metrics.Add(new(lineStart, Math.Max(0, end - lineStart), width, height, baseline, indent, firstLine, paragraphRtl)
                 { Top = y, Left = left, Justified = extra > 0, ParagraphEnd = paragraphEnd });
             maxWidth = Math.Max(maxWidth, width); inkBottom = Math.Max(inkBottom, baseline + descent); y += height;
@@ -384,10 +443,13 @@ public sealed class TextLayoutEngine : IDisposable
         {
             IndexFonts();
             StartParagraph(0);
-            foreach (var token in TextFlow.Tokenize(key.Text))
+            var tokens = TextFlow.Tokenize(key.Text);
+            for (int tokenIndex = 0; tokenIndex < tokens.Length; tokenIndex++)
             {
+                var token = tokens[tokenIndex];
                 if (token.Kind is TextTokenKind.ParagraphBreak or TextTokenKind.LineBreak)
                 {
+                    preparedField = null;
                     Finish(token.Start, paragraphEnd: token.Kind == TextTokenKind.ParagraphBreak);
                     lineStart = token.Start + token.Length;
                     if (token.Kind == TextTokenKind.ParagraphBreak) StartParagraph(lineStart);
@@ -401,10 +463,17 @@ public sealed class TextLayoutEngine : IDisposable
                     {
                         var style = RichText.StyleAt(source, token.Start);
                         float stop = paragraphStyle.DefaultTabSize > 0 ? paragraphStyle.DefaultTabSize : Font(style).TabStop;
-                        float advance = stop - (TextIndent() + usedWidth) % stop;
-                        space = new(token.Start, token.Length, [], advance, style, true);
+                        preparedField = null;
+                        float caret = TextIndent() + usedWidth;
+                        var placement = TextTabStops.Place(paragraphStyle.TabStops, caret, stop);
+                        if (placement.Custom && placement.Alignment != TextTabAlignment.Left)
+                        {
+                            var field = PrepareField(tokens, tokenIndex);
+                            placement = TextTabStops.Place(paragraphStyle.TabStops, caret, stop, field.Width, field.Decimal);
+                        }
+                        space = new(token.Start, token.Length, [], Math.Max(0, placement.Start - caret), style, true, placement);
                     }
-                    else space = Shape(token.Start, token.Length, true);
+                    else space = preparedField is not null && preparedField.TryGetValue(token.Start, out var readySpace) ? readySpace : Shape(token.Start, token.Length, true);
                     pieces.Add(space); usedWidth += space.Width; continue;
                 }
                 foreach (var rune in key.Text.AsSpan(token.Start, token.Length).EnumerateRunes())
@@ -418,7 +487,8 @@ public sealed class TextLayoutEngine : IDisposable
                 bool canSplit = key.Wrap && TextFlow.AllowsEmergencyBreak(key.Text.AsSpan(token.Start, token.Length));
                 // Do not shape an entire long token just to discard it and shape every prefix again.
                 // All prefix probes still use HarfBuzz; no guessed character-width shortcut.
-                Piece? word = token.Length <= 512 || !canSplit ? Shape(token.Start, token.Length) : null;
+                Piece? word = preparedField is not null && preparedField.TryGetValue(token.Start, out var readyWord) ? readyWord :
+                    token.Length <= 512 || !canSplit ? Shape(token.Start, token.Length) : null;
                 float available = Available();
                 if (!key.Wrap) { pieces.Add(word!); usedWidth += word!.Width; continue; }
                 bool hasContent = pieces.Any(p => !p.Space);
@@ -430,6 +500,15 @@ public sealed class TextLayoutEngine : IDisposable
                     var probe = FitPrefix(token, probeBounds, 0, Math.Max(1, available - usedWidth));
                     if (probe.Count == probeBounds.Length - 1 && usedWidth + probe.Piece.Width <= available)
                     { pieces.Add(probe.Piece); usedWidth += probe.Piece.Width; continue; }
+                }
+                // A deliberately out-of-box stop is not silently discarded. Preserve
+                // the anchor and clip overflow; later words can wrap normally. For an
+                // overwide aligned field clamped to the caret, normal wrapping applies.
+                if (pieces.LastOrDefault()?.Tab is { Custom: true, Clamped: false } anchor &&
+                    anchor.Start >= key.Width - paragraphStyle.ParagraphRightMargin)
+                {
+                    word ??= Shape(token.Start, token.Length);
+                    pieces.Add(word); usedWidth += word.Width; continue;
                 }
                 if (hasContent) Finish(token.Start, automatic: true);
                 else if (pieces.Count > 0)
@@ -450,8 +529,9 @@ public sealed class TextLayoutEngine : IDisposable
                 }
             }
             Finish(key.Text.Length, paragraphEnd: true);
-            var info = new TextLayoutMetrics(maxWidth, Math.Max(y, inkBottom), glyphCount, metrics.ToImmutable(), mixed);
-            long bytes = 256 + key.Text.Length * 2L + key.Ranges.Length * 160L + glyphCount * 32L + metrics.Count * 96L + draw.Count * 160L;
+            var info = new TextLayoutMetrics(maxWidth, Math.Max(y, inkBottom), glyphCount, metrics.ToImmutable(), mixed)
+                { Tabs = tabMetrics?.ToImmutable() ?? [], HasUnsupportedTabDirection = unsupportedTabDirection };
+            long bytes = 256 + key.Text.Length * 2L + key.Ranges.Length * 160L + glyphCount * 32L + metrics.Count * 96L + draw.Count * 160L + (tabMetrics?.Count ?? 0) * 48L;
             return new(key, info, draw, bytes);
         }
 

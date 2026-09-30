@@ -5,7 +5,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
 
-// This exact driver is compiled against both the immutable 0.7 baseline and the changed source in CI.
+// This exact driver is compiled against both the immutable 0.8 baseline and the changed source in CI.
 // CPU/raster benchmark, not a hardware-GPU benchmark or an end-to-end browser FPS claim.
 var results = new List<object>();
 void Measure(string name, int iterations, Action<int> work)
@@ -39,7 +39,7 @@ Measure("lookup-512-cells-in-64x64-table", 80, iteration =>
 });
 TableLayout? layoutSink = null;
 Measure("layout-64x64-table-at-changing-bounds", 80, i => layoutSink = new TableLayout(table, new(i % 10, 0, 1280, 720)));
-// Public APIs are intentionally shared with the 0.7 baseline. Warm layout and
+// Public APIs are intentionally shared with the 0.8 baseline. Warm layout and
 // first-use shaping are separate workloads; report both, not only cache hits.
 var paragraph = SlideFactory.Text(string.Join(" ", Enumerable.Repeat("Office typography: AVATAR, efficient spaces and shared measurements.", 40)), 0, 0, 620, 700, 18);
 paragraph = paragraph with { TextRanges = [new(7, 10, new() { FontSize = 25, Bold = true })] };
@@ -55,6 +55,16 @@ var longToken = SlideFactory.Text(new string('x', 12000), 0, 0, 300, 600, 14);
 Measure("layout-first-use-12000-character-token", 16, _ =>
 {
     using var cold = new SlideRenderer(); heightSink = cold.MeasureRichTextHeight(longToken, 300, 3);
+});
+// Explicit tab types are new in 0.9, so compare the unchanged public regular-tab
+// API separately, not as though the baseline had supported the new feature.
+using var tabEngine = new TextLayoutEngine();
+var tabStyle = new TextStyle { FontSize = 16, DefaultTabSize = 100 };
+const string tabText = "Part A\t12.50\tReady\nPart B\t3.25\tPending";
+Measure("draw-warm-regular-tabbed-text", 160, _ => tabEngine.Draw(surface.Canvas, tabText, tabStyle, new(0, 0, 600, 140)));
+Measure("layout-first-use-regular-tabbed-text", 80, _ =>
+{
+    using var cold = new TextLayoutEngine(); heightSink = cold.Measure(tabText, tabStyle, 600).Height;
 });
 GC.KeepAlive(heightSink);
 GC.KeepAlive(cellSink); GC.KeepAlive(layoutSink);

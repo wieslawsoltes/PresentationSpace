@@ -6,12 +6,13 @@ namespace PresentationSpace.Editor.Uno;
 
 public sealed partial class PresentationEditor
 {
-    private void OpenTextBodyEditor()
+    private void OpenTextBodyEditor(bool tabs = false)
     {
         FlushEdits();
         if (Session.Selection.Count != 1 || Session.PrimaryShape is null || Session.PrimaryShape.Kind is ShapeKind.Table or ShapeKind.Chart or ShapeKind.Image)
         { Notice("Select one text box or text-bearing shape. Tables have separate cell margins."); return; }
-        ShowInspector(InspectorMode.Format); DispatcherQueue.TryEnqueue(_format.FocusTextLayout);
+        ShowInspector(InspectorMode.Format);
+        DispatcherQueue.TryEnqueue(() => { if (tabs) _format.FocusTabStops(); else _format.FocusTextLayout(); });
     }
     private void SetTextBox(string label, Func<TextBoxSpec, TextBoxSpec> change)
     {
@@ -25,7 +26,8 @@ public sealed partial class PresentationEditor
     }
     private void BuildTextBodyCommands()
     {
-        _commands.Add(("Edit text layout", OpenTextBodyEditor));
+        _commands.Add(("Edit text layout", () => OpenTextBodyEditor()));
+        BuildCustomTabCommands();
         _commands.Add(("Text wrap on", () => SetTextBox("Wrap text", box => box with { Wrap = true })));
         _commands.Add(("Text wrap off", () => SetTextBox("No text wrapping", box => box with { Wrap = false })));
         foreach (float value in new[] { 0f, 3f, 12f, 24f })
@@ -43,7 +45,7 @@ public sealed partial class PresentationEditor
         }
         _commands.Add(("Paragraph hanging indent", () => Viewport.FormatParagraph("Hanging indent", style => style with { ParagraphLeftMargin = 36, ParagraphIndent = -18 })));
         _commands.Add(("Paragraph reset layout", () => Viewport.FormatParagraph("Reset paragraph layout", style => style with { SpaceBefore = 0, SpaceAfter = 0,
-            ParagraphLeftMargin = null, ParagraphRightMargin = 0, ParagraphIndent = null, DefaultTabSize = 0, LineSpacingPoints = null, Alignment = ParagraphAlignment.Left })));
+            ParagraphLeftMargin = null, ParagraphRightMargin = 0, ParagraphIndent = null, DefaultTabSize = 0, TabStops = [], LineSpacingPoints = null, Alignment = ParagraphAlignment.Left })));
         _commands.Add(("Open paragraph layout sample", () =>
         {
             FlushEdits(); Session.EditDocument("Insert paragraph layout sample", d =>
