@@ -40,6 +40,10 @@ with sync_playwright() as p:
         page.wait_for_function(condition, timeout=20000)
         page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
         page.wait_for_function(condition, timeout=20000)
+    def canvas_focus():
+        # A no-op Escape does not change the model, so unchanged text diagnostics
+        # cannot fence native input detachment. Assert product focus, never set it.
+        page.wait_for_function("() => document.activeElement?.id === 'uno-body' && document.documentElement.getAttribute('data-focus-id') === 'slide-canvas:SlideViewport'", timeout=20000)
     def capture_state(name):
         page.screenshot(path=str(out / (name + '.png')), full_page=True)
         (out / (name + '.json')).write_text(json.dumps(page.evaluate("() => ({attributes:Object.fromEntries([...document.documentElement.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])), input:{id:document.activeElement?.id,tag:document.activeElement?.tagName,value:document.activeElement?.value}})"), indent=2))
@@ -69,6 +73,7 @@ with sync_playwright() as p:
         editing()
         page.wait_for_function("text => document.activeElement.value === text", arg='Canvas heading\nSecond line')
         page.keyboard.press('Escape')
+        canvas_focus()
         attr('data-table-text-length', before - old_length + len('Canvas heading\nSecond line'))
         page.keyboard.press('Tab')
         attr('data-table-cell-column', 1)
@@ -84,13 +89,14 @@ with sync_playwright() as p:
         capture_state('table-cell-before-pointer')
         rect = page.evaluate("() => {const r=document.activeElement.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};}")
         page.keyboard.press('Escape')
-        page.wait_for_function("() => document.activeElement?.tagName !== 'TEXTAREA'")
+        canvas_focus()
         page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
         observations.append({'view': 'table-pointer-target', **rect})
         page.mouse.dblclick(rect['x'], rect['y'], delay=80)
         editing()
         attr('data-table-cell-column', 2)
         page.keyboard.press('Escape')
+        canvas_focus()
         page.keyboard.press('ArrowLeft')
         page.keyboard.press('ArrowLeft')
         attr('data-table-cell-column', 0)

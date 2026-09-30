@@ -48,12 +48,12 @@ jobs:
           mkdir -p artifacts/serve
           ln -s "$PWD/artifacts/site" artifacts/serve/PresentationSpace
           python3 -m http.server 8080 --directory artifacts/serve > artifacts/server.log 2>&1 &
-          python3 tools/browser-smoke.py
-          python3 tools/browser-performance.py
-          python3 tools/browser-chrome.py
-          python3 tools/browser-typography.py
-          python3 tools/browser-text-body.py
-          python3 tools/browser-tabs.py
+          failed=0
+          for suite in smoke performance chrome typography text-body tabs; do
+            python3 "tools/browser-$suite.py" || failed=1
+          done
+          # Collect every independent suite's diagnostics, but never deploy if any failed.
+          test "$failed" -eq 0
           mkdir -p artifacts/site/screenshots
           cp artifacts/screenshots/*.png artifacts/site/screenshots/
       - uses: actions/upload-artifact@v4
