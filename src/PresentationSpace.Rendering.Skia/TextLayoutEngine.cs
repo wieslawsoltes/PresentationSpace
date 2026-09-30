@@ -57,7 +57,15 @@ public sealed class TextLayoutEngine : IDisposable
     private sealed record FontSection(int Start, int End, NativeFont Font);
     private sealed record ShapedRun(SKShaper.Result Glyphs, float[] Advances, bool Rtl);
     private sealed record GlyphSpan(NativeFont Font, int Start, SKShaper.Result Glyphs, float[] Advances, TextStyle[] Styles, bool Rtl);
-    private sealed record Piece(int Start, int Length, List<GlyphSpan> Spans, float Width, TextStyle Style, bool Space = false, TextTabPlacement? Tab = null);
+    private record Piece(int Start, int Length, List<GlyphSpan> Spans, float Width, TextStyle Style, bool Space = false);
+    // Tab metadata belongs only to tab pieces, not every word and shaping probe.
+    // Keeping the common piece compact avoids a cold-layout allocation penalty.
+    private sealed record TabPiece : Piece
+    {
+        public TextTabPlacement Placement { get; }
+        public TabPiece(int start, int length, float width, TextStyle style, TextTabPlacement placement)
+            : base(start, length, [], width, style, true) => Placement = placement;
+    }
     private sealed record DrawRun(SKTextBlob Blob, SKColor Color, float X, float Y, float UnderlineStart, float UnderlineWidth, float UnderlineY, float UnderlineThickness);
     private sealed class Entry(Key key, TextLayoutMetrics metrics, List<DrawRun> runs, long bytes) : IDisposable
     {
@@ -354,7 +362,7 @@ public sealed class TextLayoutEngine : IDisposable
         void Finish(int end, bool paragraphEnd = false, bool automatic = false)
         {
             // Exclude trailing breaking spaces from alignment, while keeping their source indexes.
-            while (pieces.Count > 0 && pieces[^1].Space && pieces[^1].Tab is not { Custom: true }) { usedWidth -= pieces[^1].Width; pieces.RemoveAt(pieces.Count - 1); }
+            while (pieces.Count > 0 && pieces[^1].Space && pieces[^1] is not TabPiece { Placement.Custom: true }) { usedWidth -= pieces[^1].Width; pieces.RemoveAt(pieces.Count - 1); }
             usedWidth = Math.Max(0, usedWidth);
             float ascent = 0, descent = 0, leading = 0, size = 0;
             void Include(TextStyle style)
@@ -371,7 +379,7 @@ public sealed class TextLayoutEngine : IDisposable
             float baseline = y + ascent + Math.Max(0, height - ink) / 2;
             float indent = TextIndent(), available = Available();
             float free = Math.Max(0, available - usedWidth);
-            bool customTabs = pieces.Any(p => p.Tab is { Custom: true });
+            bool customTabs = pieces.Any(p => p is TabPiece { Placement.Custom: true });
             unsupportedTabDirection |= customTabs && (paragraphRtl || sawRtl);
             // Explicit stops are absolute content coordinates, not subject to a second
             // whole-line alignment translation. Tabbed lines are never justified.
@@ -401,7 +409,7 @@ public sealed class TextLayoutEngine : IDisposable
             for (int i = 0; i < pieces.Count; i++)
             {
                 var piece = pieces[paragraphRtl ? pieces.Count - 1 - i : i];
-                if (piece.Tab is { } tab)
+                if (piece is TabPiece { Placement: var tab })
                 {
                     tabMetrics ??= ImmutableArray.CreateBuilder<TextTabMetrics>();
                     if (currentTab is { } prior) tabMetrics.Add(prior with { FieldEnd = x });
@@ -472,7 +480,7 @@ public sealed class TextLayoutEngine : IDisposable
                             var field = PrepareField(tokens, tokenIndex);
                             placement = TextTabStops.Place(paragraphStyle.TabStops, caret, stop, field.Width, field.Decimal);
                         }
-                        space = new(token.Start, token.Length, [], Math.Max(0, placement.Start - caret), style, true, placement);
+                        space = new TabPiece(token.Start, token.Length, Math.Max(0, placement.Start - caret), style, placement);
                     }
                     else space = preparedField is not null && preparedField.TryGetValue(token.Start, out var readySpace) ? readySpace : Shape(token.Start, token.Length, true);
                     pieces.Add(space); usedWidth += space.Width; continue;
@@ -505,7 +513,7 @@ public sealed class TextLayoutEngine : IDisposable
                 // A deliberately out-of-box stop is not silently discarded. Preserve
                 // the anchor and clip overflow; later words can wrap normally. For an
                 // overwide aligned field clamped to the caret, normal wrapping applies.
-                if (pieces.LastOrDefault()?.Tab is { Custom: true, Clamped: false } anchor &&
+                if (pieces.LastOrDefault() is TabPiece { Placement: { Custom: true, Clamped: false } anchor } &&
                     anchor.Start >= key.Width - paragraphStyle.ParagraphRightMargin)
                 {
                     word ??= Shape(token.Start, token.Length);
