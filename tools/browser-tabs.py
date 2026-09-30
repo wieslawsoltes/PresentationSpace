@@ -43,7 +43,10 @@ with sync_playwright() as p:
         for _ in range(6): page.keyboard.press('Shift+ArrowRight')
         page.wait_for_function('() => document.activeElement.selectionStart === 0 && document.activeElement.selectionEnd === 6')
         page.keyboard.press('Control+b'); attr('data-primary-range-length', 6)
+        attr('data-primary-text-length', len(text))
+        page.wait_for_function("text => document.activeElement?.tagName === 'TEXTAREA' && document.activeElement.value === text", arg=text)
         page.keyboard.press('Control+Enter')
+        attr('data-primary-text-length', len(text))
         stops = '130 Decimal\n250 Right'
         edit_tabs(stops); attr('data-text-tab-stops', stops); attr('data-text-tab-count', 2)
         attr('data-primary-text-length', len(text)); attr('data-primary-range-length', 6)
@@ -70,6 +73,10 @@ with sync_playwright() as p:
     except Exception:
         failures.append(traceback.format_exc()); raise
     finally:
+        try:
+            state = page.evaluate("() => ({attributes: Object.fromEntries([...document.documentElement.attributes].filter(a => a.name.startsWith('data-')).map(a => [a.name,a.value])), input: {id:document.activeElement?.id,tag:document.activeElement?.tagName,value:document.activeElement?.value,start:document.activeElement?.selectionStart,end:document.activeElement?.selectionEnd}})")
+            (out / 'custom-tabs-state.json').write_text(json.dumps(state, indent=2))
+        except Exception as error: errors.append(str(error))
         try: shot('custom-tabs-final')
         except Exception as error: errors.append(str(error))
         (out / 'browser-tabs.json').write_text(json.dumps({'errors': errors, 'failures': failures, 'observations': observations}, indent=2))

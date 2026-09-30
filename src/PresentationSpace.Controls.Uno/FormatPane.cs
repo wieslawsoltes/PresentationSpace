@@ -51,7 +51,7 @@ public sealed class FormatPane : SessionControl
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
             Hint(shape.Name+(s.Selection.Count>1?$" · {s.Selection.Count} objects selected":""));
-            Section("Accessibility");var alternative=new TextBox{Header="Alternative text",Text=shape.AlternativeText,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,FontSize=12};
+            Section("Accessibility");var alternative=new TextBox{Header="Alternative text",AcceptsReturn=true,Text=shape.AlternativeText,TextWrapping=TextWrapping.Wrap,FontSize=12};
             alternative.IsEnabled=!shape.Locked;
             var alternativeTarget=SelectionEditSnapshot.Capture(s);
             alternative.LostFocus+=(_,_)=>{if(!_building&&alternative.Text!=shape.AlternativeText)alternativeTarget.TryApply(s,"Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
@@ -106,7 +106,7 @@ public sealed class FormatPane : SessionControl
                     };
                     _body.Children.Add(_textLayoutEditor);
                 }
-                Section("Text");var text=new TextBox{Text=shape.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.IsEnabled=!shape.Locked;var textTarget=SelectionEditSnapshot.Capture(s);text.LostFocus+=(_,_)=>{if(!_building&&text.Text!=shape.Text)textTarget.TryApply(s,"Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
+                Section("Text");var text=new TextBox{AcceptsReturn=true,Text=shape.Text,TextWrapping=TextWrapping.Wrap,MinHeight=78,FontSize=12};text.IsEnabled=!shape.Locked;var textTarget=SelectionEditSnapshot.Capture(s);text.LostFocus+=(_,_)=>{if(!_building&&text.Text!=shape.Text)textTarget.TryApply(s,"Edit text",x=>x with{Text=text.Text});};_body.Children.Add(text);
                 Number("Font size",shape.TextStyle.FontSize,v=>s.Apply("Font size",x=>x with{TextStyle=x.TextStyle with{FontSize=Math.Clamp(v,1,512)}}));Palette(color=>s.Apply("Text color",x=>x with{TextStyle=x.TextStyle with{Color=color}}));
                 Choice("Vertical alignment",Enum.GetNames<Core.VerticalAlignment>(),shape.TextStyle.VerticalAlignment.ToString(),value=>s.Apply("Text vertical alignment",x=>x with{TextStyle=x.TextStyle with{VerticalAlignment=Enum.Parse<Core.VerticalAlignment>(value)}}));
             }

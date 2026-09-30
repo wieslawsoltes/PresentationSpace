@@ -74,7 +74,7 @@ public sealed partial class SlideViewport
         int availableText = TableModel.MaxTextLength - table.Cells.Where(c => !ReferenceEquals(c, cell)).Sum(c => c.Text.Length);
         _cellEditor = new TextBox
         {
-            Text = cell.Text, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = Math.Max(1, availableText), IsReadOnly = availableText == 0,
+            AcceptsReturn = true, Text = cell.Text, TextWrapping = TextWrapping.Wrap, MaxLength = Math.Max(1, availableText), IsReadOnly = availableText == 0,
             FontFamily = new FontFamily(style.FontFamily), FontSize = Math.Max(1, style.FontSize * _scale),
             FontWeight = style.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
             FontStyle = style.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,

@@ -66,6 +66,7 @@ public sealed partial class SlideViewport
 
     private void HandleFormattingKey(object sender, KeyRoutedEventArgs e)
     {
+        if (!ReferenceEquals(sender, _editor)) return;
         if (e.Handled || !Key(VirtualKey.Control) || Key(VirtualKey.Menu) || e.Key is not (VirtualKey.B or VirtualKey.I or VirtualKey.U)) return;
         bool editing = _editor is not null;
         CaptureTextSelection(); var selection = _textSelection;

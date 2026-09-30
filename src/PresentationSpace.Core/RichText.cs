@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 namespace PresentationSpace.Core;
 
 /// <summary>Immutable UTF-16 range operations. Plain Text remains the canonical string.</summary>
-public static class RichText
+public static partial class RichText
 {
     public static bool IsBoundary(string text, int index) => index >= 0 && index <= text.Length &&
         (index == 0 || index == text.Length || !(char.IsHighSurrogate(text[index - 1]) && char.IsLowSurrogate(text[index])));
@@ -78,13 +78,20 @@ public static class RichText
         var adjusted = before;
         if (before.Text != after.Text)
         {
-            int prefix = 0;
-            while (prefix < before.Text.Length && prefix < after.Text.Length && before.Text[prefix] == after.Text[prefix]) prefix++;
-            while (!IsBoundary(before.Text, prefix) || !IsBoundary(after.Text, prefix)) prefix--;
-            int suffix = 0;
-            while (suffix < before.Text.Length - prefix && suffix < after.Text.Length - prefix && before.Text[^(suffix + 1)] == after.Text[^(suffix + 1)]) suffix++;
-            while (!IsBoundary(before.Text, before.Text.Length - suffix) || !IsBoundary(after.Text, after.Text.Length - suffix)) suffix--;
-            adjusted = Replace(before, prefix, before.Text.Length - prefix - suffix, after.Text.Substring(prefix, after.Text.Length - prefix - suffix));
+            // Native multiline input may change all CR/LF spellings at once. Do not
+            // treat the text between the first and last delimiter as one replacement:
+            // that would erase otherwise unchanged character/paragraph formatting.
+            if (TryReconcileLineEndings(before, after.Text, out var normalized)) adjusted = normalized;
+            else
+            {
+                int prefix = 0;
+                while (prefix < before.Text.Length && prefix < after.Text.Length && before.Text[prefix] == after.Text[prefix]) prefix++;
+                while (!IsBoundary(before.Text, prefix) || !IsBoundary(after.Text, prefix)) prefix--;
+                int suffix = 0;
+                while (suffix < before.Text.Length - prefix && suffix < after.Text.Length - prefix && before.Text[^(suffix + 1)] == after.Text[^(suffix + 1)]) suffix++;
+                while (!IsBoundary(before.Text, before.Text.Length - suffix) || !IsBoundary(after.Text, after.Text.Length - suffix)) suffix--;
+                adjusted = Replace(before, prefix, before.Text.Length - prefix - suffix, after.Text.Substring(prefix, after.Text.Length - prefix - suffix));
+            }
         }
         var ranges = adjusted.TextRanges;
         if (before.TextStyle != after.TextStyle)

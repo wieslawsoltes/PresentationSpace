@@ -2,6 +2,9 @@
 
 ## 0.9.0 — Custom tab alignment and safe inspector commits
 
+- Fix carriage-return-only custom-tab input on Uno Skia; preserve every paragraph when reopening native text/table editors or building the formatting pane.
+- Preserve mixed character/paragraph ranges when native controls normalize CR/LF delimiters; ignore delayed focus/selection events from removed inline text editors.
+
 - Add immutable Left/Center/Right/Decimal tab stops, validated invariant authoring and actual glyph-measured field placement.
 - Preserve custom tabs in character/paragraph edits, presentation resizing, native DrawingML and schema-6 documents, with schemas 1–5 readable.
 - Expose immutable tab-layout diagnostics, regular-stop fallback and explicit mixed-direction limitations.

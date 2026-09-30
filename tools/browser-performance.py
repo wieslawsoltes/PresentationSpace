@@ -64,6 +64,12 @@ with sync_playwright() as p:
         attr('data-table-text-length', before)
         page.keyboard.press('Control+y')
         attr('data-table-text-length', before - old_length + len('Canvas heading\nSecond line'))
+        # Reopening native multiline input must not truncate the second paragraph.
+        command('Edit table cell on slide')
+        editing()
+        page.wait_for_function("text => document.activeElement.value === text", arg='Canvas heading\nSecond line')
+        page.keyboard.press('Escape')
+        attr('data-table-text-length', before - old_length + len('Canvas heading\nSecond line'))
         page.keyboard.press('Tab')
         attr('data-table-cell-column', 1)
         page.keyboard.press('Enter')

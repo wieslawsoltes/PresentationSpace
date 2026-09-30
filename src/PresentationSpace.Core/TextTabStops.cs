@@ -59,7 +59,10 @@ public static class TextTabStops
         ArgumentNullException.ThrowIfNull(text);
         if (text.Length > 4096) throw new InvalidDataException("Tab definitions exceed 4,096 characters.");
         var stops = ImmutableArray.CreateBuilder<TextTabStop>();
-        foreach (string line in text.Split('\n'))
+        // WinUI/Uno Skia can expose CR-only newlines even when the browser input
+        // contains LF. ReadLine accepts CR, LF and CRLF without joining definitions.
+        using var reader = new StringReader(text);
+        while (reader.ReadLine() is { } line)
         {
             var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (fields.Length == 0) continue;
