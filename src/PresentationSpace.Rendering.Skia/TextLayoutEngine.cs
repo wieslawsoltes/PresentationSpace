@@ -131,8 +131,9 @@ public sealed class TextLayoutEngine : IDisposable
     {
         foreach (var entry in _lru) entry.Dispose();
         _entries.Clear(); _lru.Clear(); _bytes = 0;
+        _paint?.Dispose(); _paint = null;
     }
-    public void Dispose() { if (_disposed) return; Clear(); _paint?.Dispose(); _paint = null; _disposed = true; }
+    public void Dispose() { if (_disposed) return; Clear(); _disposed = true; }
     private void Trim()
     {
         while (_lru.First is { } first && (_entries.Count > Math.Max(0, MaximumCachedLayouts) || _bytes > Math.Max(0, CacheBudget)))

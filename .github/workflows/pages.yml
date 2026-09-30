@@ -53,6 +53,7 @@ jobs:
           python3 tools/browser-chrome.py
           python3 tools/browser-typography.py
           python3 tools/browser-text-body.py
+          python3 tools/browser-tabs.py
           mkdir -p artifacts/site/screenshots
           cp artifacts/screenshots/*.png artifacts/site/screenshots/
       - uses: actions/upload-artifact@v4
