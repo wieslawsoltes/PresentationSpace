@@ -64,7 +64,7 @@ public sealed class TextBodyLayoutTests
         Assert.Equal(5, DocumentSerializer.Deserialize(DocumentSerializer.Serialize(Deck(text))).SchemaVersion);
         var table = TableModel.Create(2, 2) with { TextStyle = new() { DefaultTabSize = 72 } };
         Assert.Equal(5, DocumentSerializer.Deserialize(DocumentSerializer.Serialize(Deck(TableModel.Apply(new(), table)))).SchemaVersion);
-        Assert.Throws<InvalidDataException>(() => DocumentSerializer.Validate(Deck(body) with { SchemaVersion = 6 }));
+        Assert.Throws<InvalidDataException>(() => DocumentSerializer.Validate(Deck(body) with { SchemaVersion = int.MaxValue }));
     }
     [Fact] public void NoWrapStillHonorsHardAndSoftBreaksAndHasSeparateCacheEntry()
     {

@@ -40,7 +40,7 @@ public sealed class CustomTabInterchangeTests
         using var zip = new ZipArchive(new MemoryStream(data)); using var stream = zip.GetEntry("ppt/slides/slide1.xml")!.Open(); var xml = XDocument.Load(stream);
         var values = xml.Descendants(A + "tab").ToArray();
         Assert.Equal(new[] { "l", "ctr", "r", "dec" }, values.Select(n => (string?)n.Attribute("algn")));
-        Assert.Equal(Stops, PptxCodec.Import(data).Document.Slides[0].Shapes[0].TextStyle.TabStops);
+        TabAssert.Equal(Stops, PptxCodec.Import(data).Document.Slides[0].Shapes[0].TextStyle.TabStops);
     }
     [Fact] public void ParagraphsCanClearCustomStopsIndependently()
     {
@@ -48,7 +48,7 @@ public sealed class CustomTabInterchangeTests
         shape = RichTextEditing.FormatParagraphs(shape, 1, 0, s => s with { TabStops = Stops });
         var data = PptxCodec.Export(Deck(shape)).Data; Validate(data);
         var next = PptxCodec.Import(data).Document.Slides[0].Shapes[0];
-        Assert.Equal(Stops, RichText.StyleAt(next, 0).TabStops); Assert.Empty(RichText.StyleAt(next, 8).TabStops);
+        TabAssert.Equal(Stops, RichText.StyleAt(next, 0).TabStops); Assert.Empty(RichText.StyleAt(next, 8).TabStops);
     }
     [Fact] public void TableCellsPreserveNativeStopsAndCharacterStyles()
     {
@@ -57,7 +57,7 @@ public sealed class CustomTabInterchangeTests
         var cell = table.Cells[0]; table = table with { Cells = [cell with { TextRanges = [new(2, 1, table.TextStyle with { Bold = true })] }] };
         var data = PptxCodec.Export(Deck(TableModel.Apply(new SlideShape { Bounds = new(0, 0, 600, 200) }, table))).Data; Validate(data);
         var next = PptxCodec.Import(data).Document.Slides[0].Shapes[0].Table!;
-        Assert.Equal(Stops, TableModel.Style(next, next.Cells[0]).TabStops);
+        TabAssert.Equal(Stops, TableModel.Style(next, next.Cells[0]).TabStops);
         Assert.Contains(next.Cells[0].TextRanges, r => r.Style.Bold);
     }
     [Fact] public void BodyDefaultStopsApplyWithoutFirstParagraphLeakingToSiblings()
@@ -72,6 +72,38 @@ public sealed class CustomTabInterchangeTests
         var next = PptxCodec.Import(data).Document.Slides[0].Shapes[0];
         Assert.Empty(RichText.StyleAt(next, 0).TabStops);
         var stop = Assert.Single(RichText.StyleAt(next, 8).TabStops); Assert.Equal(300, stop.Position); Assert.Equal(TextTabAlignment.Right, stop.Alignment);
+    }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void LevelOneDefaultsOverrideBodyDefaultsIncludingExplicitClears(bool clear)
+    {
+        var data = Rewrite(Basic(), xml =>
+        {
+            var body = xml.Descendants(P + "txBody").First();
+            body.Element(A + "lstStyle")!.Add(
+                new XElement(A + "defPPr", new XElement(A + "tabLst", new XElement(A + "tab", new XAttribute("pos", 300 * 9525), new XAttribute("algn", "r")))),
+                new XElement(A + "lvl1pPr", new XElement(A + "tabLst", clear ? null : new XElement(A + "tab", new XAttribute("pos", 150 * 9525), new XAttribute("algn", "ctr")))));
+            body.Elements(A + "p").First().Element(A + "pPr")!.Element(A + "tabLst")!.Remove();
+        });
+        Validate(data);
+        var tabs = PptxCodec.Import(data).Document.Slides[0].Shapes[0].TextStyle.TabStops;
+        if (clear) Assert.Empty(tabs);
+        else { var stop = Assert.Single(tabs); Assert.Equal(150, stop.Position); Assert.Equal(TextTabAlignment.Center, stop.Alignment); }
+    }
+    [Fact] public void TableCellReadsBodyDefaultStops()
+    {
+        var table = TableModel.SetText(TableModel.Create(1, 1) with { HeaderRow = false }, 0, 0, "a\tb");
+        var data = PptxCodec.Export(Deck(TableModel.Apply(new(), table))).Data;
+        data = Rewrite(data, xml =>
+        {
+            var body = xml.Descendants(A + "tc").First().Element(A + "txBody")!;
+            body.Element(A + "lstStyle")!.Add(new XElement(A + "defPPr", new XElement(A + "tabLst",
+                new XElement(A + "tab", new XAttribute("pos", 200 * 9525), new XAttribute("algn", "dec")))));
+            body.Element(A + "p")!.Element(A + "pPr")!.Element(A + "tabLst")!.Remove();
+        });
+        Validate(data);
+        var imported = PptxCodec.Import(data).Document.Slides[0].Shapes[0].Table!;
+        var stop = Assert.Single(TableModel.Style(imported, imported.Cells[0]).TabStops);
+        Assert.Equal(200, stop.Position); Assert.Equal(TextTabAlignment.Decimal, stop.Alignment);
     }
     [Theory]
     [InlineData("pos", "NaN")] [InlineData("pos", "-1")] [InlineData("pos", "100000000000")]

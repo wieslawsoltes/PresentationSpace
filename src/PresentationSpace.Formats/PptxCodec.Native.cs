@@ -108,7 +108,13 @@ public static partial class PptxCodec
             text.Append(value);
         }
         // A paragraph inherits from body defaults, never from its preceding sibling.
-        TextStyle bodyStyle = shape.TextStyle, previousStyle = bodyStyle;
+        TextStyle bodyStyle = shape.TextStyle;
+        var list = body.Element(A + "lstStyle");
+        var defaults = list?.Element(A + "defPPr");
+        bodyStyle = ReadParagraphStyle(defaults, ReadRunStyle(defaults?.Element(A + "defRPr"), bodyStyle, color));
+        var levelOne = list?.Element(A + "lvl1pPr");
+        bodyStyle = ReadParagraphStyle(levelOne, ReadRunStyle(levelOne?.Element(A + "defRPr"), bodyStyle, color));
+        TextStyle previousStyle = bodyStyle;
         foreach (var paragraph in body.Elements(A + "p"))
         {
             if (!firstParagraph) Append("\n", previousStyle);

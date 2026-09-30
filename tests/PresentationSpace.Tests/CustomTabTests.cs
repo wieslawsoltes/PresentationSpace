@@ -16,7 +16,7 @@ public sealed class CustomTabTests
             CultureInfo.CurrentCulture = new("pl-PL");
             var expected = ImmutableArray.Create(new TextTabStop(72.5f), new TextTabStop(144, TextTabAlignment.Right), new TextTabStop(288, TextTabAlignment.Decimal));
             var parsed = TextTabStops.Parse("72.5 left\r\n144\tRIGHT\n\n288 Decimal");
-            Assert.Equal(expected, parsed); Assert.Equal(expected, TextTabStops.Parse(TextTabStops.Format(parsed)));
+            TabAssert.Equal(expected, parsed); TabAssert.Equal(expected, TextTabStops.Parse(TextTabStops.Format(parsed)));
         }
         finally { CultureInfo.CurrentCulture = before; }
     }
@@ -74,7 +74,7 @@ public sealed class CustomTabTests
         var shape = SlideFactory.Text("one\ttwo", 10, 10, 400, 100) with { TextStyle = new() { TabStops = [new(150)] } };
         var document = new PresentationDocument { Slides = [new() { Shapes = [shape, new() { TextBox = new() }] }] };
         var copy = DocumentSerializer.Deserialize(DocumentSerializer.Serialize(document));
-        Assert.Equal(6, copy.SchemaVersion); Assert.Equal(shape.TextStyle.TabStops, copy.Slides[0].Shapes[0].TextStyle.TabStops);
+        Assert.Equal(6, copy.SchemaVersion); TabAssert.Equal(shape.TextStyle.TabStops, copy.Slides[0].Shapes[0].TextStyle.TabStops);
         var table = TableModel.Create(1, 1) with { TextStyle = shape.TextStyle };
         Assert.Equal(6, DocumentSerializer.Deserialize(DocumentSerializer.Serialize(Deck(TableModel.Apply(new(), table)))).SchemaVersion);
     }
