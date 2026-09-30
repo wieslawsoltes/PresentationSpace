@@ -284,9 +284,11 @@ public sealed partial class SlideViewport : UserControl
         _editingId = shape.Id;
         _editingSlideId = Session.CurrentSlide.Id;
         var bounds = shape.Bounds;
+        // Enable multiline before assigning text; single-line coercion discards
+        // everything after the first paragraph when a formatting command reopens input.
         _editor = new TextBox
         {
-            Text = shape.Text, AcceptsReturn = true, TextWrapping = TextBoxModel.Resolve(shape).Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            AcceptsReturn = true, Text = shape.Text, TextWrapping = TextBoxModel.Resolve(shape).Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             FontFamily = new FontFamily(shape.TextStyle.FontFamily), FontSize = Math.Max(8, shape.TextStyle.FontSize * _scale),
             Width = Math.Max(50, bounds.Width * _scale), Height = Math.Max(40, bounds.Height * _scale),
             Padding = new(TextBoxModel.Resolve(shape).MarginLeft * _scale, TextBoxModel.Resolve(shape).MarginTop * _scale, TextBoxModel.Resolve(shape).MarginRight * _scale, TextBoxModel.Resolve(shape).MarginBottom * _scale), BorderThickness = new(1), BorderBrush = Ribbon.Uno.OfficePalette.Accent,
@@ -299,16 +301,18 @@ public sealed partial class SlideViewport : UserControl
         Canvas.SetLeft(_editor, _ox + bounds.X * _scale);
         Canvas.SetTop(_editor, _oy + bounds.Y * _scale);
         _overlay.Children.Add(_editor);
-        _editor.KeyDown += (_, e) =>
+        _editor.KeyDown += (sender, e) =>
         {
+            if (!ReferenceEquals(sender, _editor)) return;
             if (e.Key == VirtualKey.Escape) { CancelText(); e.Handled = true; }
             else if (e.Key == VirtualKey.Enter && Key(VirtualKey.Control))
             { CommitText(); Focus(FocusState.Programmatic); e.Handled = true; }
         };
-        _editor.TextChanged += (_, _) => UpdateTextDraft();
+        _editor.TextChanged += (sender, _) => { if (ReferenceEquals(sender, _editor)) UpdateTextDraft(); };
         _editor.KeyDown += HandleFormattingKey;
-        _editor.SelectionChanged += (_, _) => CaptureTextSelection();
-        _editor.LostFocus += (_, _) => CommitText();
+        _editor.SelectionChanged += (sender, _) => { if (ReferenceEquals(sender, _editor)) CaptureTextSelection(); };
+        // A removed native editor must not commit or detach its successor.
+        _editor.LostFocus += (sender, _) => { if (ReferenceEquals(sender, _editor)) CommitText(); };
         _editor.Focus(FocusState.Programmatic);
         _editor.SelectAll();
     }

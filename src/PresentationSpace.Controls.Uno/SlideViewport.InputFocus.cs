@@ -5,16 +5,27 @@ namespace PresentationSpace.Controls.Uno;
 
 public sealed partial class SlideViewport
 {
+#if __WASM__
+    private bool _nativeCanvasFocusQueued;
+#endif
     private void RestoreNativeCanvasFocus(object sender, RoutedEventArgs e)
     {
 #if __WASM__
-        if (ActiveTable is null || _cellEditor is not null || XamlRoot is not { } root ||
-            !ReferenceEquals(FocusManager.GetFocusedElement(root), this)) return;
-        // Uno detaches its native text input in a microtask. Keep browser focus aligned
-        // with this already-focused canvas after that detach. Otherwise the first Tab
-        // is intercepted as an unfocused-page accessibility-activation key.
-        // Never move focus from another input, semantic control, or accessibility button.
-        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("queueMicrotask(()=>queueMicrotask(()=>{const a=document.activeElement;if(document.hasFocus()&&(!a||a===document.body||a===document.documentElement)){const root=document.getElementById('uno-body');if(root){root.tabIndex=-1;root.focus({preventScroll:true});}}}));");
+        if (_nativeCanvasFocusQueued || ActiveTable is null || _editor is not null || _cellEditor is not null ||
+            XamlRoot is not { } root || !ReferenceEquals(FocusManager.GetFocusedElement(root), this)) return;
+        // Removing native input can finish after the routed key/focus handlers.
+        // Defer past that event, then recheck the actual managed focus and target;
+        // an event from a closed cell must never steal a newly selected input's focus.
+        _nativeCanvasFocusQueued = true;
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            _nativeCanvasFocusQueued = false;
+            if (!IsLoaded || !ReferenceEquals(XamlRoot, root) || ActiveTable is null || _editor is not null ||
+                _cellEditor is not null || !ReferenceEquals(FocusManager.GetFocusedElement(root), this)) return;
+            // Focus only the already-focused canvas' browser root, never another
+            // input, semantic control or accessibility-activation button.
+            global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("queueMicrotask(()=>{const a=document.activeElement;if(document.hasFocus()&&(!a||a===document.body||a===document.documentElement)){const target=document.getElementById('uno-body');if(target){target.tabIndex=-1;target.focus({preventScroll:true});}}});");
+        })) _nativeCanvasFocusQueued = false;
 #endif
     }
 }

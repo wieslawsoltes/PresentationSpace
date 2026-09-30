@@ -42,7 +42,8 @@ public static partial class PptxCodec
             ParagraphLeftMargin = p.Attribute("marL") is null ? fallback.ParagraphLeftMargin : TextNumber(p, "marL", 0, Emu),
             ParagraphRightMargin = TextNumber(p, "marR", fallback.ParagraphRightMargin, Emu),
             ParagraphIndent = p.Attribute("indent") is null ? fallback.ParagraphIndent : TextNumber(p, "indent", 0, Emu, -10000),
-            DefaultTabSize = TextNumber(p, "defTabSz", fallback.DefaultTabSize, Emu)
+            DefaultTabSize = TextNumber(p, "defTabSz", fallback.DefaultTabSize, Emu),
+            TabStops = ReadTabStops(p.Element(A + "tabLst"), fallback.TabStops)
         };
         TextFlow.ValidateStyle(style); return style;
     }

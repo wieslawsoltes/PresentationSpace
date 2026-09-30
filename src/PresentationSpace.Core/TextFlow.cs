@@ -37,6 +37,7 @@ public static class TextFlow
             !TextBoxModel.ValidMargin(style.ParagraphRightMargin) || !TextBoxModel.ValidMargin(style.DefaultTabSize) ||
             style.ParagraphIndent is { } indent && (!float.IsFinite(indent) || Math.Abs(indent) > 10000))
             throw new InvalidDataException("Invalid text style.");
+        TextTabStops.Validate(style.TabStops);
     }
 
     public static ImmutableArray<TextToken> Tokenize(string text)

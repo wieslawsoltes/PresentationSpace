@@ -1,6 +1,6 @@
 # Compatibility and limitations
 
-PresentationSpace 0.8 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
+PresentationSpace 0.9 is a development preview, not a complete or pixel-exact PowerPoint clone, a byte-preserving OOXML editor, or a certified Office replacement.
 
 ## Format matrix
 
@@ -104,3 +104,18 @@ The **Text layout** pane applies its explicit paragraph settings to the whole ob
 Supported DrawingML body/paragraph properties round-trip. Missing body attributes can inherit from available layout/master placeholder bodies. Before/after spacing expressed as percentages is approximated as absolute values relative to the paragraph font, not retained as a live percentage. Vertical/rotated text flow, text columns, persistent autofit, arbitrary custom tab stops/leaders, numbered/multilevel list semantics, full theme inheritance and every Office paragraph precedence rule remain unfinished. Body dimensions and paragraph spacing/indents are bounded and invalid numeric input is rejected. Native documents using any new property require schema 5; older schemas remain readable. This does not make arbitrary PPTX imports lossless.
 
 Complete bidi/line-break conformance, automatic script/font fallback, fully styled input, master/layout/theme authoring, advanced objects/media/timing/coauthoring and native Office visual qualification remain separate gaps. Retain original PPTX files.
+
+## 0.9 custom tab stops
+
+Left, Center, Right and Decimal custom tab stops are modeled, editable and rendered for horizontal left-to-right fields. Each stop is between 0 and 10,000 96-DPI slide units, strictly increasing, with at most 32 entries. The first custom stop strictly after the current position wins; after the last custom stop, the regular interval applies. Stops are relative to the text content left edge (after text-box/cell insets), not the object's outer border. Decimal alignment uses the first ASCII period; values without a period align at their right edge. Locale-specific decimal/grouping marks, leaders, bar tabs, RTL/mixed-direction tab layout and exact Office field-wrapping behavior are not implemented. Layout metrics identify unsupported tab-direction content; no general bidi conformance is claimed.
+
+Text before/after a tab retains its mixed fonts, sizes, colors and underline. An alignment that would move backwards is clamped to the current position, reported in metrics; an out-of-bounds stop is clipped inside the content rectangle, not silently moved onto the slide. Empty custom tab fields retain their positions. Overwide fields can wrap using normal line-breaking rules. Lines with explicit tabs retain absolute tab anchors rather than applying paragraph center/right offsets or justification again.
+
+Native DrawingML tab lists and alignment flags round-trip in supported shape and table text. Absent lists inherit available body defaults, while an explicit empty list clears tabs. Per-layout/per-master paragraph inheritance and preservation of all unsupported package parts are still incomplete. Native custom stops require schema 6; ordinary older-feature documents keep the lowest applicable schema, and schemas 1–5 remain readable. Original PPTX files should be retained.
+
+The custom-tab text field is an explicit-apply authoring control, not an on-canvas ruler or full Office Tabs dialog. One `position alignment` per line, invariant decimal numbers; an omitted alignment means Left. Ctrl+Enter or Apply commits only a valid complete draft. Settings apply to the whole shape in the pane; existing selection-aware commands and the immutable model provide per-paragraph differences. Changing selection discards unapplied layout drafts; recovery retains committed document state, not active drafts.
+
+Raw inspector text/alternative-text/numeric focus-loss commits now check the captured immutable target selection. Stale/locked/changed targets are not overwritten. This guard is single-use and safe against reentrant focus callbacks, but does not implement multi-user concurrency or persist pane drafts across application restarts. Full PowerPoint parity, master/theme authoring, advanced typography/object/media/timing/coauthoring and native Office/desktop/physical-GPU qualification remain unfinished.
+
+
+Native tab-definition entry accepts CR, LF and CRLF line separators; formatted definitions use LF. Multiline controls enable return handling before assigning existing content, so reopening text, cell or inspector input does not truncate later paragraphs. Separator-only CR/LF normalization preserves character/paragraph ranges, including offsets after collapsed CRLF pairs. A CRLF whose two code units have different styles takes the first code unit's style when collapsed. This does not provide fully styled native input or general rich-text merging of multiple unrelated replacements.

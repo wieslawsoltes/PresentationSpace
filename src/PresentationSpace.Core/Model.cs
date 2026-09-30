@@ -46,6 +46,8 @@ public sealed record TextStyle
     public float? ParagraphIndent { get; init; }
     /// <summary>Zero uses four space advances; otherwise an explicit tab interval in slide units.</summary>
     public float DefaultTabSize { get; init; }
+    /// <summary>Ordered custom stops measured from the text body's left content edge. Empty uses regular intervals.</summary>
+    public ImmutableArray<TextTabStop> TabStops { get; init; } = [];
 }
 
 /// <summary>A non-overlapping UTF-16 text range with explicit character formatting.</summary>
@@ -133,9 +135,13 @@ public static class DocumentSerializer
             {
                 version = Math.Max(version, table.FirstColumn || table.LastColumn || table.BandedColumns ? 4 : 3);
                 if (TextBoxModel.HasParagraphLayout(table.TextStyle) || table.Cells.Any(c =>
-                    c.TextStyle is not null && TextBoxModel.HasParagraphLayout(c.TextStyle) || c.TextRanges.Any(r => TextBoxModel.HasParagraphLayout(r.Style)))) version = 5;
+                    c.TextStyle is not null && TextBoxModel.HasParagraphLayout(c.TextStyle) || c.TextRanges.Any(r => TextBoxModel.HasParagraphLayout(r.Style)))) version = Math.Max(version, 5);
             }
-            if (shape.TextBox is not null || TextBoxModel.HasParagraphLayout(shape.TextStyle) || shape.TextRanges.Any(r => TextBoxModel.HasParagraphLayout(r.Style))) version = 5;
+            if (shape.TextBox is not null || TextBoxModel.HasParagraphLayout(shape.TextStyle) || shape.TextRanges.Any(r => TextBoxModel.HasParagraphLayout(r.Style))) version = Math.Max(version, 5);
+            if (!shape.TextStyle.TabStops.IsDefaultOrEmpty || shape.TextRanges.Any(r => !r.Style.TabStops.IsDefaultOrEmpty) ||
+                shape.Table is { } tabTable && (!tabTable.TextStyle.TabStops.IsDefaultOrEmpty || tabTable.Cells.Any(c =>
+                    c.TextStyle is not null && !c.TextStyle.TabStops.IsDefaultOrEmpty || c.TextRanges.Any(r => !r.Style.TabStops.IsDefaultOrEmpty))))
+                version = Math.Max(version, 6);
         }
         return version;
     }
@@ -149,7 +155,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();

@@ -44,6 +44,10 @@ public static partial class PptxCodec
             if (style.Bullets || style.ParagraphIndent is not null) properties.Add(V("indent", E(TextBoxModel.FirstIndent(style))));
             if (style.ParagraphRightMargin != 0) properties.Add(V("marR", E(style.ParagraphRightMargin)));
             if (style.DefaultTabSize > 0) properties.Add(V("defTabSz", E(style.DefaultTabSize)));
+            // An explicit empty list prevents inherited custom stops from leaking into another paragraph.
+            defaults.AddBeforeSelf(new XElement(A + "tabLst", style.TabStops.Select(stop => new XElement(A + "tab",
+                V("pos", E(stop.Position)), V("algn", stop.Alignment switch {
+                    TextTabAlignment.Center => "ctr", TextTabAlignment.Right => "r", TextTabAlignment.Decimal => "dec", _ => "l" })))));
             return new XElement(A + "p", properties);
         }
         var paragraph = Paragraph(0);
@@ -104,7 +108,13 @@ public static partial class PptxCodec
             text.Append(value);
         }
         // A paragraph inherits from body defaults, never from its preceding sibling.
-        TextStyle bodyStyle = shape.TextStyle, previousStyle = bodyStyle;
+        TextStyle bodyStyle = shape.TextStyle;
+        var list = body.Element(A + "lstStyle");
+        var defaults = list?.Element(A + "defPPr");
+        bodyStyle = ReadParagraphStyle(defaults, ReadRunStyle(defaults?.Element(A + "defRPr"), bodyStyle, color));
+        var levelOne = list?.Element(A + "lvl1pPr");
+        bodyStyle = ReadParagraphStyle(levelOne, ReadRunStyle(levelOne?.Element(A + "defRPr"), bodyStyle, color));
+        TextStyle previousStyle = bodyStyle;
         foreach (var paragraph in body.Elements(A + "p"))
         {
             if (!firstParagraph) Append("\n", previousStyle);
