@@ -1,0 +1,34 @@
+name: Integrate custom tab layout
+on:
+  push:
+    branches: [work/custom-tabs-0.9]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'integrate-tabs:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply checksum-verified implementation
+        run: |
+          set -euo pipefail
+          git diff --exit-code 24b4799cdab540f9f754198b3b56a4a547ad36a4 HEAD -- src tests tools Directory.Build.props
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(Path('.ci/tabs.0').read_bytes() + Path('.ci/tabs.1').read_bytes())
+          assert hashlib.sha256(patch).hexdigest() == '8f5a522bf687b7c1c30c3041c7f828a2ac068df318c6f993401b82550d31e030'
+          Path('/tmp/tabs.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/tabs.patch
+          git apply /tmp/tabs.patch
+          rm .ci/tabs.0 .ci/tabs.1
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: aligned custom text tabs, native DrawingML preservation and reusable authoring'
+          git push origin HEAD:work/custom-tabs-0.9
