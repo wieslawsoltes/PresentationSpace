@@ -31,6 +31,10 @@ with sync_playwright() as p:
     try:
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         page.wait_for_function("document.documentElement.getAttribute('data-presentationspace') === 'ready'", timeout=120000)
+        # First paint and dispatched model diagnostics complete separately.
+        page.bring_to_front()
+        attr('data-slide-count', 4)
+        page.wait_for_function("document.hasFocus() && document.documentElement.getAttribute('data-focus-id') === 'slide-canvas:SlideViewport'", timeout=20000)
         command('Open custom tabs sample'); attr('data-slide-count', 5); attr('data-slide-index', 4)
         attr('data-slide-name', 'Custom tabs · aligned fields'); shot('custom-tabs-editor')
         page.keyboard.press('Shift+F5'); attr('data-presenting', 'true'); shot('custom-tabs-show')
