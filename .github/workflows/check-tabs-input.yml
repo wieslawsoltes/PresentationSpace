@@ -39,6 +39,12 @@ jobs:
           new = "        page.keyboard.press('Escape')\n        page.wait_for_function(\"() => document.activeElement?.tagName !== 'TEXTAREA' && document.documentElement.getAttribute('data-focus-id') === 'slide-canvas:SlideViewport'\")\n        page.evaluate(\"() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))\")\n        attr('data-table-text-length', before - old_length + len('Canvas heading\\nSecond line'))"
           assert text.count(old) == 1
           path.write_text(text.replace(old, new))
+          tabs = Path('tools/browser-tabs.py')
+          text = tabs.read_text()
+          old = "        command('Open custom tabs sample');"
+          new = "        page.bring_to_front()\n        attr('data-slide-count', 4)\n        page.wait_for_function(\"document.hasFocus() && document.documentElement.getAttribute('data-focus-id') === 'slide-canvas:SlideViewport'\", timeout=20000)\n" + old
+          assert text.count(old) == 1
+          tabs.write_text(text.replace(old,new))
           PY
           python -m http.server 8080 --directory artifacts/serve > artifacts/server.log 2>&1 &
           result=0
