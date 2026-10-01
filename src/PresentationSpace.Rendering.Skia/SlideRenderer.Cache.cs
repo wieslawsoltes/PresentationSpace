@@ -14,6 +14,7 @@ public sealed partial class SlideRenderer
     private SKPicture? _scene;
     private ImmutableArray<SlideShape> _sceneShapes;
     private string? _sceneBackground;
+    private GradientFill? _sceneBackgroundGradient;
     private float _sceneWidth, _sceneHeight;
     private ITypefaceResolver? _cacheResolver;
     private long _cacheResolverVersion = -1;
@@ -31,11 +32,12 @@ public sealed partial class SlideRenderer
     public void ClearRenderCache()
     {
         _textLayout.Clear();
+        ClearGradientCache();
         ClearPictureCache();
     }
     private void ClearPictureCache()
     {
-        _scene?.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBytes = 0; _rejectedScene = default;
+        _scene?.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBackgroundGradient = null; _sceneBytes = 0; _rejectedScene = default;
         foreach (var entry in _pictureLru) entry.Picture.Dispose();
         _pictures.Clear(); _pictureLru.Clear(); _pictureBytes = 0;
     }
@@ -46,7 +48,7 @@ public sealed partial class SlideRenderer
         if (!ReferenceEquals(resolver, _cacheResolver) || version != _cacheResolverVersion) { ClearRenderCache(); _cacheResolver = resolver; _cacheResolverVersion = version; }
         if (!EnablePictureCache) { ClearPictureCache(); return; }
         while (_pictures.Count > Math.Max(0, MaximumCachedPictures) || _pictureBytes > Math.Max(0, PictureCacheBudget)) EvictPicture();
-        if (_scene is not null && (!EnableSceneCache || !EnablePictureCache || _sceneShapes.Length > Math.Max(0, MaximumCachedPictures) || _sceneBytes > Math.Max(0, PictureCacheBudget))) { _scene.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBytes = 0; }
+        if (_scene is not null && (!EnableSceneCache || !EnablePictureCache || _sceneShapes.Length > Math.Max(0, MaximumCachedPictures) || _sceneBytes > Math.Max(0, PictureCacheBudget))) { _scene.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBackgroundGradient = null; _sceneBytes = 0; }
     }
     private void EvictPicture()
     {
@@ -56,7 +58,7 @@ public sealed partial class SlideRenderer
     }
     private static bool SameDrawing(SlideShape a, SlideShape b) => ReferenceEquals(a, b) ||
         a.Kind == b.Kind && a.Bounds.Width == b.Bounds.Width && a.Bounds.Height == b.Bounds.Height &&
-        a.Fill == b.Fill && a.Stroke == b.Stroke && a.StrokeWidth == b.StrokeWidth &&
+        a.Fill == b.Fill && a.FillGradient == b.FillGradient && a.Rotation == b.Rotation && a.Stroke == b.Stroke && a.StrokeWidth == b.StrokeWidth &&
         a.Text == b.Text && a.TextStyle == b.TextStyle && a.TextBox == b.TextBox && a.TextRanges == b.TextRanges &&
         ReferenceEquals(a.Chart, b.Chart) && ReferenceEquals(a.Table, b.Table) && a.Cells == b.Cells &&
         a.Labels == b.Labels && a.Values == b.Values && a.TableColumns == b.TableColumns;
@@ -112,10 +114,10 @@ public sealed partial class SlideRenderer
     private bool DrawRetainedScene(SKCanvas canvas, PresentationDocument document, Slide slide)
     {
         if (!EnableSceneCache || !EnablePictureCache || PictureCacheBudget <= 0) return false;
-        if (_scene is not null && _sceneShapes == slide.Shapes && _sceneBackground == slide.Background &&
+        if (_scene is not null && _sceneShapes == slide.Shapes && _sceneBackground == slide.Background && _sceneBackgroundGradient == slide.BackgroundGradient &&
             _sceneWidth == document.Width && _sceneHeight == document.Height)
         { _sceneHits++; canvas.DrawPicture(_scene); return true; }
-        _scene?.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBytes = 0;
+        _scene?.Dispose(); _scene = null; _sceneShapes = default; _sceneBackground = null; _sceneBackgroundGradient = null; _sceneBytes = 0;
         if (_rejectedScene == slide.Shapes || slide.Shapes.Length > MaximumCachedPictures) return false;
         // Scenes with images rely on the image budget instead of retaining image references twice.
         if (slide.Shapes.Any(s => s.Kind == ShapeKind.Image)) return false;
@@ -128,6 +130,6 @@ public sealed partial class SlideRenderer
         long retainedBytes = (long)picture.ApproximateBytesUsed + _recordingSceneBytes;
         if (retainedBytes > PictureCacheBudget) { _rejectedScene = slide.Shapes; picture.Dispose(); return false; }
         _sceneBytes = retainedBytes;
-        _scene = picture; _sceneShapes = slide.Shapes; _sceneBackground = slide.Background; _sceneWidth = document.Width; _sceneHeight = document.Height; canvas.DrawPicture(picture); return true;
+        _scene = picture; _sceneShapes = slide.Shapes; _sceneBackground = slide.Background; _sceneBackgroundGradient = slide.BackgroundGradient; _sceneWidth = document.Width; _sceneHeight = document.Height; canvas.DrawPicture(picture); return true;
     }
 }

@@ -55,8 +55,9 @@ public sealed partial class TableDataEditor : UserControl
         panel.Children.Add(_header); panel.Children.Add(_bands); panel.Children.Add(_total);
         BuildDesignControls(panel);
         panel.Children.Add(new TextBlock { Text = "Table accent", FontSize = 12 }); var accent = new ColorPalette(); accent.ColorSelected += (_, color) => Change(t => t with { Accent = color }); panel.Children.Add(accent);
-        panel.Children.Add(Button("Reset cell formatting", () => Change(t => TableModel.EditCells(t, _range, c => c with { Fill = null, TextStyle = null, TextRanges = [], Left = new(), Right = new(), Top = new(), Bottom = new() }))));
-        panel.Children.Add(new TextBlock { Text = "Selected cell fill", FontSize = 12 }); var fill = new ColorPalette(); fill.ColorSelected += (_, color) => Change(t => TableModel.EditCells(t, _range, c => c with { Fill = color })); panel.Children.Add(fill);
+        panel.Children.Add(Button("Reset cell formatting", () => Change(t => TableModel.EditCells(t, _range, c => c with { Fill = null, FillGradient = null, TextStyle = null, TextRanges = [], Left = new(), Right = new(), Top = new(), Bottom = new() }))));
+        panel.Children.Add(new TextBlock { Text = "Selected cell fill", FontSize = 12 }); var fill = new ColorPalette(); fill.ColorSelected += (_, color) => Change(t => TableModel.EditCells(t, _range, c => c with { Fill = color, FillGradient = null })); panel.Children.Add(fill);
+        BuildCellGradient(panel);
         panel.Children.Add(new TextBlock { Text = "Selected text color", FontSize = 12 }); var foreground = new ColorPalette(); foreground.ColorSelected += (_, color) => FormatText(s => s with { Color = color }); panel.Children.Add(foreground);
         var font = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         font.Children.Add(Button("Bold", () => FormatText(s => s with { Bold = !TableModel.Style(_value, TableModel.CellAt(_value, _row, _column)).Bold })));
@@ -133,6 +134,7 @@ public sealed partial class TableDataEditor : UserControl
         try
         {
             var cell = TableModel.CellAt(_value, _row, _column); var style = TableModel.Style(_value, cell); _text.Text = cell.Text;
+            _cellGradient.SetValue(cell.FillGradient);
             _rowSize.Text = _value.RowHeights[_row].ToString("0.##", CultureInfo.InvariantCulture); _columnSize.Text = _value.ColumnWidths[_column].ToString("0.##", CultureInfo.InvariantCulture); _fontSize.Text = style.FontSize.ToString("0.##", CultureInfo.InvariantCulture);
             _horizontal.SelectedIndex = (int)style.Alignment; _vertical.SelectedIndex = (int)style.VerticalAlignment;
             _header.IsChecked = _value.HeaderRow; _bands.IsChecked = _value.BandedRows; _total.IsChecked = _value.TotalRow;

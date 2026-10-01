@@ -61,6 +61,7 @@ public sealed record SlideShape
     public RectF Bounds { get; init; } = new(100, 100, 260, 140);
     public float Rotation { get; init; }
     public string Fill { get; init; } = "#D35230";
+    public GradientFill? FillGradient { get; init; }
     public string Stroke { get; init; } = "#00000000";
     public float StrokeWidth { get; init; } = 1.5f;
     public float Opacity { get; init; } = 1;
@@ -94,6 +95,7 @@ public sealed record Slide
     public Guid Id { get; init; } = Guid.NewGuid();
     public string Name { get; init; } = "Untitled slide";
     public string Background { get; init; } = "#FFFFFF";
+    public GradientFill? BackgroundGradient { get; init; }
     public ImmutableArray<SlideShape> Shapes { get; init; } = [];
     public string? LayoutName { get; init; }
     public string Notes { get; init; } = "";
@@ -129,6 +131,8 @@ public static class DocumentSerializer
     private static int RequiredSchema(PresentationDocument document)
     {
         int version = document.SchemaVersion;
+        if (document.Slides.Any(s => s.BackgroundGradient is not null || s.Shapes.Any(x => x.FillGradient is not null ||
+            x.Table is { } t && t.Cells.Any(c => c.FillGradient is not null)))) version = Math.Max(version, 8);
         foreach (var slide in document.Slides) foreach (var shape in slide.Shapes)
         {
             if (shape.Picture is not null) version = Math.Max(version, 7);
@@ -157,7 +161,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();
@@ -165,10 +169,12 @@ public static class DocumentSerializer
         foreach (var slide in d.Slides)
         {
             if (slide is null || !ids.Add(slide.Id) || slide.Shapes.IsDefault || slide.Comments.IsDefault) throw new InvalidDataException("Invalid or duplicate slide.");
+            if (slide.BackgroundGradient is { } backgroundGradient) GradientModel.Validate(backgroundGradient);
             if (!float.IsFinite(slide.TransitionDuration) || slide.TransitionDuration < 0 || slide.TransitionDuration > 60) throw new InvalidDataException("Invalid transition duration.");
             foreach (var s in slide.Shapes)
             {
                 if (++total > 20000 || s is null || !ids.Add(s.Id)) throw new InvalidDataException("Too many shapes or duplicate identifiers.");
+                if (s.FillGradient is { } gradient) { GradientModel.Validate(gradient); if (!GradientModel.Supports(s)) throw new InvalidDataException("Gradient fill is not applicable to this object kind."); }
                 var b = s.Bounds;
                 if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height) || b.Width <= 0 || b.Height <= 0 || Math.Abs(b.X) > 100000 || Math.Abs(b.Y) > 100000 || b.Width > 100000 || b.Height > 100000) throw new InvalidDataException("Invalid shape geometry.");
                 if (s.TextStyle is null || !float.IsFinite(s.TextStyle.FontSize) || s.TextStyle.FontSize < 1 || s.TextStyle.FontSize > 2048 || !float.IsFinite(s.Rotation) || !float.IsFinite(s.Opacity) || s.Opacity < 0 || s.Opacity > 1 || !float.IsFinite(s.StrokeWidth) || s.StrokeWidth < 0 || s.StrokeWidth > 1000 || !float.IsFinite(s.TextStyle.LineSpacing) || s.TextStyle.LineSpacing <= 0 || s.TextStyle.LineSpacing > 10) throw new InvalidDataException("Invalid shape styling.");

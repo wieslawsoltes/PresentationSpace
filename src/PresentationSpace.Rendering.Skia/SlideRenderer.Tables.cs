@@ -14,7 +14,7 @@ public sealed partial class SlideRenderer
             if (_tableLayouts.Count >= 32) _tableLayouts.Clear();
             entry = (table, shape.Bounds, new TableLayout(table, shape.Bounds)); _tableLayouts[shape.Id] = entry;
         }
-        RenderTable(canvas, entry.Layout);
+        RenderTable(canvas, entry.Layout, shape.Rotation);
     }
     /// <summary>Draw a table without a presentation document or editor. Caller owns the canvas transform.</summary>
     public void RenderTable(SKCanvas canvas, TableSpec table, RectF bounds)
@@ -24,7 +24,7 @@ public sealed partial class SlideRenderer
             throw new ArgumentOutOfRangeException(nameof(bounds));
         RenderTable(canvas, new TableLayout(table, bounds));
     }
-    private void RenderTable(SKCanvas canvas, TableLayout layout)
+    private void RenderTable(SKCanvas canvas, TableLayout layout, float rotation = 0)
     {
         var table = layout.Table;
         var borders = new List<(TableBorder Border, SKPoint Start, SKPoint End)>();
@@ -36,7 +36,7 @@ public sealed partial class SlideRenderer
             {
                 var b = layout.Bounds(cell); var rect = new SKRect(b.X, b.Y, b.Right, b.Bottom);
                 if (!canvas.LocalClipBounds.IntersectsWith(rect)) continue;
-                paint.Color = Color(TableModel.Fill(table, cell)); canvas.DrawRect(rect, paint);
+                ConfigureFill(paint, TableModel.Fill(table, cell), cell.FillGradient, b, rotation); canvas.DrawRect(rect, paint); paint.Shader = null;
                 var textBounds = new RectF(b.X + cell.MarginLeft, b.Y + cell.MarginTop, b.Width - cell.MarginLeft - cell.MarginRight, b.Height - cell.MarginTop - cell.MarginBottom);
                 if (textBounds.Width > 0 && textBounds.Height > 0 && cell.Text.Length > 0)
                     DrawRichText(canvas, TableModel.TextShape(table, cell, textBounds), 0);

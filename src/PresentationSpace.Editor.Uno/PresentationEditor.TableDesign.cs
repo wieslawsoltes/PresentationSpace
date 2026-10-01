@@ -25,6 +25,7 @@ public sealed partial class PresentationEditor
             Cmd("table-first-column", "First Column", "\uE8E4", () => DesignTable(t => t.ToggleFirstColumn()), false),
             Cmd("table-last-column", "Last Column", "\uE8E2", () => DesignTable(t => t.ToggleLastColumn()), false),
             Cmd("table-banded-columns", "Banded Columns", "\uE80A", () => DesignTable(t => t.ToggleBandedColumns()), false)));
+        yield return new("Cell Fill",Cmd("table-gradient","Gradient","\uE790",()=>DesignTable(t=>t.FocusGradient(),true)));
         yield return new("Borders", Menu("table-borders", "Borders  ⌄", "\uE80A", Enum.GetValues<TableBorderScope>().Select(scope => (scope.ToString(), (Action)(() => DesignTable(t => t.ApplyBorderScope(scope)))))));
         yield return new("Layout", Cmd("table-autofit", "Auto-fit\nRows", "\uE740", Viewport.AutoFitTableRows), Cmd("table-edit", "Edit\nCells", "\uE70F", () => DesignTable(t => t.FocusText(), true)));
     }

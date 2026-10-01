@@ -16,9 +16,19 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.9 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.11 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
 
-## What is new in 0.9
+## What is new in 0.11
+
+**Editable linear gradients.** Shapes, slide backgrounds and table cells support 2–64 color stops, independent stop opacity, clockwise angles, aspect-scaled direction and rotate-with-shape behavior. Repeated stop positions create sharp boundaries. Rendering, PNG/PDF and native PPTX export use the same model. Solid-fill palette choices explicitly remove the gradient rather than leaving a hidden override.
+
+**Reusable gradient authoring.** Select a filled shape and use **Shape Format → Gradient Fill**, or **Alt+Q → Edit gradient fill**. Each line contains `position% #RRGGBB opacity%`, for example `0 #157F9C 100` and `100 #D9BEED 40`. **Ctrl+Enter** applies stop text; **Enter** applies an angle. The full valid draft is one undoable edit. Background and table-cell gradient commands are also available. Numeric/text authoring is not a complete Office gradient-stop slider. Unapplied fields are not recovery state.
+
+**More faithful native fills.** Supported DrawingML gradients remain editable, including stop transparency and line geometry. Imports resolve fills from matching layout/master placeholders, theme fill/background references and the related master theme rather than whichever theme appears first in a ZIP. RGB, system `lastClr`, theme colors and the documented transform subset share one resolver. The imported result is explicit color data, not a live Office theme hierarchy.
+
+**Open gradient fill sample** appends an original slide with gradient shapes, a background and table cells. New native files using gradients require schema 8; schemas 1–7 remain readable. The renderer has bounded shader retention, and import reuses bounded layout/master/theme XML snapshots. See [compatibility](docs/compatibility.md) and [performance](docs/performance.md) for limits and measurement instructions.
+
+## Previous: 0.9 custom tabs
 
 **Custom tab-aligned text.** Author independent Left, Center, Right and Decimal tab stops for each paragraph. Tab fields are aligned using actual shaped glyph advances, including mixed fonts and sizes. Decimal alignment uses the first period; a field without one is right-aligned. The shared renderer serves slide editing, previews, slide show, table text and PNG/PDF output. Existing regular tab intervals remain the fallback after the last custom stop.
 
@@ -366,7 +376,7 @@ Return `false` from `SaveAsync` when the user cancels; recovery must not imply t
 
 ## Files, privacy and recovery
 
-Native `.pspace` preserves this application's model, including mixed text, notes, local comments and animation settings. Structured tables use schema version 3 and charts require at least version 2, so older builds reject unsupported structure rather than silently losing it. Version 0.5 reads schemas 1, 2 and 3. PNG/PDF are delivery formats. PPTX supports real text runs, preset shapes, embedded pictures, merged/styled native tables, native supported multi-series charts, notes and basic transitions. It does not preserve arbitrary unsupported OOXML parts.
+Native `.pspace` preserves this application's model, including mixed text, notes, local comments and animation settings. Structured tables use schema version 3 and charts require at least version 2, so older builds reject unsupported structure rather than silently losing it. Version 0.11 reads schemas 1–8; features determine the minimum version emitted. PNG/PDF are delivery formats. PPTX supports real text runs, preset shapes, embedded pictures, merged/styled native tables, native supported multi-series charts, notes and basic transitions. It does not preserve arbitrary unsupported OOXML parts.
 
 Editing needs no account or server. **AutoSave means device-local recovery, not OneDrive, cloud backup or coauthoring.** Download a native file for durable storage. Browser storage can be cleared or evicted. Share exports files.
 

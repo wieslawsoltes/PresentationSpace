@@ -30,7 +30,7 @@ public sealed class SlidePreview : UserControl
     }
     public void SetSlide(PresentationDocument document, Slide slide)
     {
-        bool changed = _slide?.Shapes != slide.Shapes || _slide?.Background != slide.Background ||
+        bool changed = _slide?.Shapes != slide.Shapes || _slide?.Background != slide.Background || _slide?.BackgroundGradient != slide.BackgroundGradient ||
             _document?.Width != document.Width || _document?.Height != document.Height || !ReferenceEquals(_document?.Assets, document.Assets);
         _document = document; _slide = slide;
         if (changed) _canvas.Invalidate();

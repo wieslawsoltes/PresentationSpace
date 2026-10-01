@@ -21,6 +21,7 @@ public sealed record TableCell
     public TextStyle? TextStyle { get; init; }
     public ImmutableArray<TextRangeStyle> TextRanges { get; init; } = [];
     public string? Fill { get; init; }
+    public GradientFill? FillGradient { get; init; }
     public TableBorder Left { get; init; } = new();
     public TableBorder Right { get; init; } = new();
     public TableBorder Top { get; init; } = new();
@@ -113,6 +114,7 @@ public static partial class TableModel
             if (cell.Text is null || (textLength += cell.Text.Length) > MaxTextLength || cell.TextRanges.IsDefault) throw new InvalidDataException("Table text exceeds the limit or is invalid.");
             if (cell.TextStyle is { } style) CheckStyle(style);
             if (cell.Fill is { } fill) CheckColor(fill);
+            if (cell.FillGradient is { } gradient) GradientModel.Validate(gradient);
             foreach (var border in new[] { cell.Left, cell.Right, cell.Top, cell.Bottom })
             {
                 if (border is null || !float.IsFinite(border.Width) || border.Width < 0 || border.Width > 100 || !Enum.IsDefined(border.Dash)) throw new InvalidDataException("Invalid table border.");
