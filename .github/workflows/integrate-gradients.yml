@@ -23,14 +23,14 @@ jobs:
           assert hashlib.sha256(patch).hexdigest() == '78e6f3fcdae8d43f6c520fc40b6ded982b41d8fce73d01f3aa09f8213d3984e5'
           Path('/tmp/gradient.patch').write_bytes(patch)
           PY
-          git apply --check --unidiff-zero /tmp/gradient.patch
-          git apply --unidiff-zero /tmp/gradient.patch
+          # Workflow changes require the authorized connector, not this contents-only job token.
+          git apply --check --unidiff-zero --exclude=.github/workflows/pages.yml /tmp/gradient.patch
+          git apply --unidiff-zero --exclude=.github/workflows/pages.yml /tmp/gradient.patch
           rm .ci/gradient.0 .ci/gradient.1 .ci/gradient.2 .ci/gradient.3
           rmdir .ci
-          rm .github/workflows/integrate-gradients.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          test "$(git write-tree)" = 'fa9a87aab8cd71ef1142df6cfd1a5928b635a413'
+          git diff --cached --exit-code -- .github/workflows
           git commit -m 'feat: editable native gradients, inherited fills and bounded shared rendering'
           git push origin HEAD:work/gradient-fill-0.11
