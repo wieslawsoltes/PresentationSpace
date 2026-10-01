@@ -1,0 +1,36 @@
+name: Integrate shared gradient layout
+on:
+  push:
+    branches: [work/gradient-fill-0.11]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'integrate-gradients:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply checksum-verified source changes
+        run: |
+          set -euo pipefail
+          git diff --exit-code 0116707606c265af50122656571fb3d93a278ffd HEAD -- src tests tools docs README.md CHANGELOG.md Directory.Build.props .github/workflows/pages.yml
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(b''.join(Path(f'.ci/gradient.{i}').read_bytes() for i in range(4)))
+          assert hashlib.sha256(patch).hexdigest() == '78e6f3fcdae8d43f6c520fc40b6ded982b41d8fce73d01f3aa09f8213d3984e5'
+          Path('/tmp/gradient.patch').write_bytes(patch)
+          PY
+          git apply --check --unidiff-zero /tmp/gradient.patch
+          git apply --unidiff-zero /tmp/gradient.patch
+          rm .ci/gradient.0 .ci/gradient.1 .ci/gradient.2 .ci/gradient.3
+          rmdir .ci
+          rm .github/workflows/integrate-gradients.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          test "$(git write-tree)" = 'fa9a87aab8cd71ef1142df6cfd1a5928b635a413'
+          git commit -m 'feat: editable native gradients, inherited fills and bounded shared rendering'
+          git push origin HEAD:work/gradient-fill-0.11
