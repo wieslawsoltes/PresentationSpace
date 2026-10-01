@@ -5,7 +5,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
 
-// This exact driver is compiled against both the immutable 0.8 baseline and the changed source in CI.
+// This exact driver is compiled against both the immutable 0.9 baseline and the changed source in CI.
 // CPU/raster benchmark, not a hardware-GPU benchmark or an end-to-end browser FPS claim.
 var results = new List<object>();
 void Measure(string name, int iterations, Action<int> work)
@@ -39,7 +39,7 @@ Measure("lookup-512-cells-in-64x64-table", 80, iteration =>
 });
 TableLayout? layoutSink = null;
 Measure("layout-64x64-table-at-changing-bounds", 80, i => layoutSink = new TableLayout(table, new(i % 10, 0, 1280, 720)));
-// Public APIs are intentionally shared with the 0.8 baseline. Warm layout and
+// Public APIs are intentionally shared with the 0.9 baseline. Warm layout and
 // first-use shaping are separate workloads; report both, not only cache hits.
 var paragraph = SlideFactory.Text(string.Join(" ", Enumerable.Repeat("Office typography: AVATAR, efficient spaces and shared measurements.", 40)), 0, 0, 620, 700, 18);
 paragraph = paragraph with { TextRanges = [new(7, 10, new() { FontSize = 25, Bold = true })] };
@@ -66,10 +66,24 @@ Measure("layout-first-use-regular-tabbed-text", 80, _ =>
 {
     using var cold = new TextLayoutEngine(); heightSink = cold.Measure(tabText, tabStyle, 600).Height;
 });
+// Same legacy picture APIs on both revisions. Decode and setup are outside warm draws.
+using var pixels = new SKBitmap(512,256);
+var random = new Random(7913);
+for(int y=0;y<256;y++)for(int x=0;x<512;x++)pixels.SetPixel(x,y,new SKColor((byte)random.Next(256),(byte)random.Next(256),(byte)random.Next(256)));
+using var rawImage=SKImage.FromBitmap(pixels);using var encoded=rawImage.Encode(SKEncodedImageFormat.Png,100);
+var imageAsset=new PresentationAsset("shared","image/png",Convert.ToBase64String(encoded.ToArray()));
+var picture=new SlideShape{Kind=ShapeKind.Image,AssetId=imageAsset.Id,Bounds=new(0,0,100,50),Fill="#00000000",StrokeWidth=0};
+var pictureSlide=new Slide{Shapes=Enumerable.Range(0,128).Select(i=>picture with{Id=Guid.NewGuid(),Bounds=new(i%12*105,i/12*55,100,50)}).ToImmutableArray()};
+var pictures=new PresentationDocument{Slides=[pictureSlide],Assets=ImmutableDictionary<string,PresentationAsset>.Empty.Add(imageAsset.Id,imageAsset)};
+using var pictureRenderer=new SlideRenderer();
+Measure("draw-warm-128-reused-pictures",80,_=>pictureRenderer.Render(surface.Canvas,pictures,pictureSlide));
+var mediaDeck=pictures with{Slides=Enumerable.Range(0,24).Select(i=>new Slide{Shapes=[picture with{Id=Guid.NewGuid()}]}).ToImmutableArray()};
+int repeatedPicturePptxBytes=0;
+Measure("export-24-slides-sharing-one-picture",12,_=>repeatedPicturePptxBytes=PresentationSpace.Formats.PptxCodec.Export(mediaDeck).Data.Length);
 GC.KeepAlive(heightSink);
 GC.KeepAlive(cellSink); GC.KeepAlive(layoutSink);
 GC.KeepAlive(sink);
-var report = new { runtime = Environment.Version.ToString(), os = Environment.OSVersion.ToString(), processorCount = Environment.ProcessorCount, results };
+var report = new { runtime = Environment.Version.ToString(), os = Environment.OSVersion.ToString(), processorCount = Environment.ProcessorCount, repeatedPicturePptxBytes, results };
 string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
 if (args.Length > 0) { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[0]))!); File.WriteAllText(args[0], json); }
 Console.WriteLine(json);

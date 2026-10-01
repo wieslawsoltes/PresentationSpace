@@ -72,6 +72,7 @@ public sealed record SlideShape
     public int PlaceholderIndex { get; init; }
     public string AlternativeText { get; init; } = "";
     public string? AssetId { get; init; }
+    public PictureSpec? Picture { get; init; }
     public Guid? GroupId { get; init; }
     public bool Locked { get; init; }
     public bool Hidden { get; init; }
@@ -130,6 +131,7 @@ public static class DocumentSerializer
         int version = document.SchemaVersion;
         foreach (var slide in document.Slides) foreach (var shape in slide.Shapes)
         {
+            if (shape.Picture is not null) version = Math.Max(version, 7);
             if (shape.Chart is not null) version = Math.Max(version, 2);
             if (shape.Table is { } table)
             {
@@ -155,7 +157,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();
@@ -171,6 +173,11 @@ public static class DocumentSerializer
                 if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height) || b.Width <= 0 || b.Height <= 0 || Math.Abs(b.X) > 100000 || Math.Abs(b.Y) > 100000 || b.Width > 100000 || b.Height > 100000) throw new InvalidDataException("Invalid shape geometry.");
                 if (s.TextStyle is null || !float.IsFinite(s.TextStyle.FontSize) || s.TextStyle.FontSize < 1 || s.TextStyle.FontSize > 2048 || !float.IsFinite(s.Rotation) || !float.IsFinite(s.Opacity) || s.Opacity < 0 || s.Opacity > 1 || !float.IsFinite(s.StrokeWidth) || s.StrokeWidth < 0 || s.StrokeWidth > 1000 || !float.IsFinite(s.TextStyle.LineSpacing) || s.TextStyle.LineSpacing <= 0 || s.TextStyle.LineSpacing > 10) throw new InvalidDataException("Invalid shape styling.");
                 if (s.Text is null || s.Text.Length > TextFlow.MaximumTextLength || s.TextRanges.IsDefault || !Enum.IsDefined(s.Placeholder) || s.PlaceholderIndex < 0) throw new InvalidDataException("Invalid text or placeholder.");
+                if (s.Picture is { } picture)
+                {
+                    if (s.Kind != ShapeKind.Image) throw new InvalidDataException("Picture properties require an image shape.");
+                    PictureModel.Validate(picture);
+                }
                 TextFlow.ValidateStyle(s.TextStyle);
                 if (s.TextBox is { } textBox) TextBoxModel.Validate(textBox);
                 int rangeEnd = 0;

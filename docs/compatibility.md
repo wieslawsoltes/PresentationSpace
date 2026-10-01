@@ -119,3 +119,49 @@ Raw inspector text/alternative-text/numeric focus-loss commits now check the cap
 
 
 Native tab-definition entry accepts CR, LF and CRLF line separators; formatted definitions use LF. Multiline controls enable return handling before assigning existing content, so reopening text, cell or inspector input does not truncate later paragraphs. Separator-only CR/LF normalization preserves character/paragraph ranges, including offsets after collapsed CRLF pairs. A CRLF whose two code units have different styles takes the first code unit's style when collapsed. This does not provide fully styled native input or general rich-text merging of multiple unrelated replacements.
+
+
+## 0.10 picture and media scope
+
+Pictures support signed fractional source/destination edge offsets, Stretch,
+Contain and Cover fitting, rectangle/ellipse clipping, two local flip axes,
+picture-only opacity, and solid frame outlines. Geometry, crop, opacity and mask
+remain independent; editing never overwrites the source pixels. A null native
+`Picture` property keeps legacy Contain behavior (including the previously unused
+picture Fill). New explicit pictures can have a solid background beneath their
+pixels. Rotation is applied by the existing shape transform. Ellipse hit testing
+excludes its empty corners; transparent pixel hit testing is not implemented.
+
+Native PPTX reads/writes `a:srcRect`, `a:stretch/a:fillRect`, picture `a:xfrm`
+flip flags, `a:alphaModFix`, rectangle/ellipse geometry, solid outlines and existing
+shape metadata. Contain/Cover become equivalent native rectangles at export time;
+there is no custom extension claiming Office has persistent application fit modes.
+One unit of the native crop encoding is 0.001%; unrepresentable collapsed export
+rectangles are rejected. Native picture alpha is pixel opacity, separate from
+frame-fill/outline alpha. Picture-associated text is not native picture content;
+export warns rather than pretending it is retained.
+
+Crop offsets are bounded to -1000%…1000% and must leave a nonempty rectangle.
+Source outsets are transparent, not replicated edge pixels. Destination outsets
+clip against the picture shape. Fit operates on the requested source window;
+Cover centrally crops it further and Contain centers it in the destination frame.
+The crop pane uses explicit whole-draft apply and rejects stale, locked or
+reentrant submissions. Reset crop resets source/destination and selects Contain,
+while retaining mask, flips, opacity and the shape's position/rotation.
+
+PNG/JPEG/GIF/WebP header parsing is bounded and independent of Skia. Header
+validation establishes type and dimensions, not a full payload decode or EXIF
+orientation. The renderer still caps decoded pictures at 16 megapixels. Repeated
+asset identities are encoded once per export; aliases with identical bytes share
+a SHA-256-keyed media part. Imported embedded raster content is detected from its
+signature rather than its extension. External image relationships are never
+fetched. Unsupported/missing pictures are omitted with warnings; an image with no
+asset or invalid supported header cannot be exported as a valid picture.
+
+Arbitrary preset/custom picture masks, tiled fills, fill rotation independent of
+the shape, full group transformations, EMF/WMF/SVG, animated-image playback,
+EXIF orientation, recoloring/corrections, duotone, shadows, reflections, 3D and
+lossless arbitrary PPTX preservation remain unfinished. Known unsupported picture
+effects/modes are diagnosed on import. Header metadata is not security or native
+Office interoperability certification. Native Office open/save/visual tests and
+physical-GPU qualification remain separate work. Keep original files.

@@ -73,3 +73,27 @@ The same-driver comparison now uses immutable 0.8 baseline `24b4799cdab540f9f754
 A `TextLayoutEngine` owns and lazily reuses its private `SKPaint` for drawing. It remains single-thread-affine and disposes that native resource exactly once; paint is not returned to hosts. Warm layout measurements and native painting are different workloads. Use the executed CI artifact medians/allocations, including regressions; do not infer whole-application speed, physical-GPU completion, browser FPS or cold startup from CPU/raster microbenchmarks. Managed bytes exclude native and GPU allocations.
 
 Tab-placement metadata is stored only on tab pieces, not on every ordinary word or temporary shaping probe. This keeps common first-use layout allocations close to the earlier non-tab representation; the same-driver report is the authority for actual timings and allocations.
+
+
+## 0.10 picture workloads
+
+`tools/benchmark-comparison.sh` now compares immutable 0.9 `77b44a0` against the
+current source. The identical driver includes 128 repeated legacy Contain pictures
+and a 24-slide deck sharing one deterministic, high-entropy PNG. Raster setup and
+encoding occur before timing; cold image decoding is excluded from the warm draw
+case. PPTX export includes normal validation, packaging and media writes. Compare
+both `repeatedPicturePptxBytes` and the recorded export timing/managed allocations.
+New crop/mask/fit APIs are not presented as features the baseline already had.
+
+Picture rendering avoids a per-frame positional shape clone and uses a mutable
+O(1) image LRU rather than allocating a replacement cache record on every hit.
+`MaximumCachedImages` and `ImageCacheBudget` limit retained count and estimated
+RGBA pixel bytes; zero disables retention. Oversized images are temporary, and a
+budget change trims on the next image lookup. Statistics exclude compressed bytes,
+cache object metadata, native overhead, temporary decode allocations and GPU memory.
+They are not an exact process-memory limit. Each renderer remains single-thread-
+affine. `ClearImageCache` releases retained images and private picture paints.
+
+No performance numbers are claimed before the driver executes. CI artifacts carry
+raw measurements including unchanged or slower workloads. This is synthetic
+CPU/raster work, not browser FPS, startup or a physical-GPU completion benchmark.

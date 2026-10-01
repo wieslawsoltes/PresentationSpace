@@ -7,10 +7,6 @@ namespace PresentationSpace.Rendering.Skia;
 /// <summary>Disposable, single-thread-affine renderer. Coordinates are 96-DPI slide units.</summary>
 public sealed partial class SlideRenderer : IDisposable
 {
-    private sealed record CachedImage(SKImage Image, string Source, long Bytes, long Used);
-    private readonly Dictionary<string, CachedImage> _images = [];
-    private long _clock, _imageBytes;
-    public long ImageCacheBudget { get; set; } = 64 * 1024 * 1024;
     public ITypefaceResolver? TypefaceResolver { get; set; }
     /// <summary>Optional application-wide provider. Fonts remain owned by the provider.</summary>
     public static ITypefaceResolver? DefaultTypefaceResolver { get; set; }
@@ -58,6 +54,12 @@ public sealed partial class SlideRenderer : IDisposable
     }
     private void DrawShape(SKCanvas c, PresentationDocument d, SlideShape s)
     {
+        if (s.Kind == ShapeKind.Image)
+        {
+            DrawPicture(c, d, s);
+            if (!string.IsNullOrEmpty(s.Text)) DrawRichText(c, s, 12);
+            return;
+        }
         var b = s.Bounds; var r = new SKRect(b.X,b.Y,b.Right,b.Bottom);
         using var fill = new SKPaint { IsAntialias = true, Color = Color(s.Fill) };
         using var stroke = new SKPaint { IsAntialias = true, Color = Color(s.Stroke), Style = SKPaintStyle.Stroke, StrokeWidth = s.StrokeWidth, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
@@ -83,15 +85,6 @@ public sealed partial class SlideRenderer : IDisposable
                     using var arrow = new SKPath(); arrow.MoveTo(b.Right,b.Bottom); arrow.LineTo(b.Right-size*MathF.Cos(a-.5f),b.Bottom-size*MathF.Sin(a-.5f)); arrow.LineTo(b.Right-size*MathF.Cos(a+.5f),b.Bottom-size*MathF.Sin(a+.5f)); arrow.Close(); fill.Color=stroke.Color; c.DrawPath(arrow,fill);
                 }
                 break;
-            case ShapeKind.Image:
-                var image = GetImage(d,s.AssetId);
-                if(image is not null)
-                {
-                    c.Save(); c.ClipRect(r); float scale = Math.Min(b.Width/image.Width,b.Height/image.Height); float w=image.Width*scale,h=image.Height*scale;
-                    c.DrawImage(image,new SKRect(b.Center.X-w/2,b.Center.Y-h/2,b.Center.X+w/2,b.Center.Y+h/2),new SKSamplingOptions(SKFilterMode.Linear,SKMipmapMode.Linear)); c.Restore();
-                }
-                else { fill.Color=Color("#F0F1F4"); c.DrawRect(r,fill); DrawText(c,"Picture unavailable",b,new(){FontSize=20,Alignment=ParagraphAlignment.Center,VerticalAlignment=Core.VerticalAlignment.Middle}); }
-                break;
             case ShapeKind.Table: DrawTable(c,s); break;
             case ShapeKind.Chart: DrawChart(c,s); break;
             default: c.DrawRect(r,fill); if(s.StrokeWidth>0)c.DrawRect(r,stroke); break;
@@ -103,25 +96,6 @@ public sealed partial class SlideRenderer : IDisposable
     }
     public void DrawText(SKCanvas c, string text, RectF b, TextStyle style, float padding = 3) =>
         TextLayout.Draw(c, text, style, b, padding);
-    private SKImage? GetImage(PresentationDocument document,string? id)
-    {
-        if(id is null || !document.Assets.TryGetValue(id,out var asset))return null;
-        if(_images.TryGetValue(id,out var cached))
-        {
-            if(cached.Source==asset.Base64){_images[id]=cached with{Used=++_clock};return cached.Image;}
-            cached.Image.Dispose();_imageBytes-=cached.Bytes;_images.Remove(id);
-        }
-        try
-        {
-            using var data=SKData.CreateCopy(Convert.FromBase64String(asset.Base64)); using var codec=SKCodec.Create(data);
-            if(codec is null || (long)codec.Info.Width*codec.Info.Height>16_000_000)return null;
-            var image=SKImage.FromEncodedData(data);if(image is null)return null;
-            long bytes=(long)image.Width*image.Height*4;
-            while(_images.Count>0 && _imageBytes+bytes>ImageCacheBudget){var oldest=_images.MinBy(x=>x.Value.Used);oldest.Value.Image.Dispose();_imageBytes-=oldest.Value.Bytes;_images.Remove(oldest.Key);}
-            _images[id]=new(image,asset.Base64,bytes,++_clock);_imageBytes+=bytes;return image;
-        }
-        catch(FormatException){return null;}
-    }
     public void DrawSelection(SKCanvas c,IEnumerable<SlideShape> selected,float scale)
     {
         float inv=1/Math.Max(.02f,scale);using var line=new SKPaint{Color=Color("#D35230"),Style=SKPaintStyle.Stroke,StrokeWidth=1.3f*inv,IsAntialias=true};using var white=new SKPaint{Color=SKColors.White,IsAntialias=true};
@@ -152,5 +126,5 @@ public sealed partial class SlideRenderer : IDisposable
         }
         return output.ToArray();
     }
-    public void Dispose(){ClearRenderCache();_tableLayouts.Clear();foreach(var i in _images.Values)i.Image.Dispose();_images.Clear();_imageBytes=0;}
+    public void Dispose(){ClearRenderCache();_tableLayouts.Clear();ClearImageCache();}
 }

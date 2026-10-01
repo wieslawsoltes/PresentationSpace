@@ -38,11 +38,9 @@ public static partial class PptxCodec
         var b=shape.Bounds;return new(A+"xfrm",V("rot",(int)Math.Round(shape.Rotation*60000)),new XElement(A+"off",V("x",E(b.X)),V("y",E(b.Y))),new XElement(A+"ext",V("cx",E(b.Width)),V("cy",E(b.Height))));
     }
     private static XElement TextBody(string text,TextStyle style) => RichTextBody(new SlideShape { Text = text, TextStyle = style });
-    private static XElement Shape(SlideShape s,int id,string? imageRelationship=null)
+    private static XElement Shape(SlideShape s,int id)
     {
         var nonvisual=new XElement(P+"cNvPr",V("id",id),V("name",s.Name),V("descr",s.AlternativeText),V("hidden",s.Hidden?1:0));
-        if(s.Kind==ShapeKind.Image&&imageRelationship is not null)
-            return new(P+"pic",new XElement(P+"nvPicPr",nonvisual,new XElement(P+"cNvPicPr",new XElement(A+"picLocks",V("noChangeAspect",1))),new XElement(P+"nvPr")),new XElement(P+"blipFill",new XElement(A+"blip",new XAttribute(R+"embed",imageRelationship)),new XElement(A+"stretch",new XElement(A+"fillRect"))),new XElement(P+"spPr",Transform(s),new XElement(A+"prstGeom",V("prst","rect"),new XElement(A+"avLst"))));
         string geometry=s.Kind switch{ShapeKind.Ellipse=>"ellipse",ShapeKind.RoundRectangle=>"roundRect",ShapeKind.Triangle=>"triangle",ShapeKind.Diamond=>"diamond",ShapeKind.Line or ShapeKind.Arrow=>"line",_=>"rect"};
         var outline=new XElement(A+"ln",V("w",E(s.StrokeWidth)),Fill(s.Stroke,s.Opacity));if(s.Kind==ShapeKind.Arrow)outline.Add(new XElement(A+"tailEnd",V("type","triangle")));
         return new(P+"sp",new XElement(P+"nvSpPr",nonvisual,new XElement(P+"cNvSpPr",V("txBox",s.Kind==ShapeKind.Text?1:0)),new XElement(P+"nvPr",s.Placeholder == PlaceholderKind.None ? null : Placeholder(s))),new XElement(P+"spPr",Transform(s),new XElement(A+"prstGeom",V("prst",geometry),new XElement(A+"avLst")),Fill(s.Fill,s.Opacity),outline),RichTextBody(s));
@@ -59,6 +57,7 @@ public static partial class PptxCodec
             Xml("docProps/core.xml",new XElement(cp+"coreProperties",new XAttribute(XNamespace.Xmlns+"dc",dc),new XElement(dc+"title",document.Title),new XElement(dc+"creator","PresentationSpace")),"application/vnd.openxmlformats-package.core-properties+xml");
             var presentationRels=new List<XElement>{Relation("rId1","slideMaster","slideMasters/slideMaster1.xml"),Relation("rId2","notesMaster","notesMasters/notesMaster1.xml"),Relation("rId3","presProps","presProps.xml")};
             var slideIds=new XElement(P+"sldIdLst");
+            var pictureParts = new PictureParts(zip, types, warnings);
             for(int index=0;index<document.Slides.Length;index++)
             {
                 var slide=document.Slides[index];int number=index+1;string rid="rId"+(number+3);slideIds.Add(new XElement(P+"sldId",V("id",256+index),new XAttribute(R+"id",rid)));presentationRels.Add(Relation(rid,"slide",$"slides/slide{number}.xml"));
@@ -72,13 +71,18 @@ public static partial class PptxCodec
                     {
                         if(shape.Kind==ShapeKind.Table){shapes.Add(NativeTable(shape,objectId++));continue;}
                         if(shape.Kind==ShapeKind.Chart){shapes.Add(NativeChart(zip,types,shape,objectId++,number,rels));continue;}
-                        string? imageRid=null;
-                        if(shape.Kind==ShapeKind.Image&&shape.AssetId is {} assetId&&document.Assets.TryGetValue(assetId,out var asset))
+                        if (shape.Kind == ShapeKind.Image)
                         {
-                            imageRid="rIdImage"+objectId;string extension=asset.MimeType switch{"image/jpeg"=>"jpg","image/webp"=>"webp","image/gif"=>"gif",_=>"png"};string path=$"ppt/media/slide{number}image{objectId}.{extension}";
-                            using(var stream=zip.CreateEntry(path).Open()){var data=Convert.FromBase64String(asset.Base64);stream.Write(data);}types.Add(new XElement(CT+"Override",V("PartName","/"+path),V("ContentType",asset.MimeType)));rels.Add(Relation(imageRid,"image",$"../media/slide{number}image{objectId}.{extension}"));
+                            if (shape.AssetId is not { } assetId || !document.Assets.TryGetValue(assetId, out var asset))
+                                throw new InvalidDataException("A picture has no embedded raster asset.");
+                            var part = pictureParts.Add(asset);
+                            string ridImage = "rIdImage" + objectId;
+                            rels.Add(Relation(ridImage, "image", "../media/" + Path.GetFileName(part.Path)));
+                            shapes.Add(NativePicture(shape, objectId++, ridImage, part.Header));
+                            if (shape.Text.Length > 0) warnings.Add("Text attached directly to a picture is not exported; use a separate text box.");
+                            continue;
                         }
-                        shapes.Add(Shape(shape,objectId++,imageRid));
+                        shapes.Add(Shape(shape,objectId++));
                     }
                 }
                 var root=Root(P+"sld",V("show",slide.Hidden?0:1),new XElement(P+"cSld",V("name",slide.Name),new XElement(P+"bg",new XElement(P+"bgPr",Fill(slide.Background),new XElement(A+"effectLst"))),GroupTree(shapes.ToArray())),ColorMapOverride());
@@ -200,9 +204,21 @@ public static partial class PptxCodec
                 if(body is not null)shape=ReadTextBox(shape,warnings,body.Element(A+"bodyPr"),layoutShape?.Element(P+"txBody")?.Element(A+"bodyPr"),masterShape?.Element(P+"txBody")?.Element(A+"bodyPr"));
                 if(node.Name==P+"pic")
                 {
-                    string imageId=(string?)node.Descendants(A+"blip").FirstOrDefault()?.Attribute(R+"embed")??"";if(!rels.TryGetValue(imageId,out var imageRel)){warnings.Add("A linked or unsupported picture was omitted.");return;}
-                    if(!assetPaths.TryGetValue(imageRel.Path,out var aid)){var entry=zip.GetEntry(imageRel.Path);if(entry is null)return;string extension=Path.GetExtension(imageRel.Path).ToLowerInvariant();if(extension is not (".png" or ".jpg" or ".jpeg" or ".gif" or ".webp")){warnings.Add("An unsupported image format was omitted.");return;}using var stream=entry.Open();using var bytes=new MemoryStream();stream.CopyTo(bytes);aid=Guid.NewGuid().ToString("N");assetPaths[imageRel.Path]=aid;assets[aid]=new(aid,extension is ".jpg" or ".jpeg"?"image/jpeg":extension==".gif"?"image/gif":extension==".webp"?"image/webp":"image/png",Convert.ToBase64String(bytes.ToArray()));}
-                    shape=shape with{Kind=ShapeKind.Image,AssetId=aid,Fill="#00000000"};
+                    string imageId=(string?)node.Element(P+"blipFill")?.Element(A+"blip")?.Attribute(R+"embed")??"";
+                    if (!rels.TryGetValue(imageId, out var imageRel) || !imageRel.Type.EndsWith("/image", StringComparison.Ordinal))
+                    { warnings.Add("A linked or unsupported picture was omitted."); return; }
+                    if (!assetPaths.TryGetValue(imageRel.Path, out var aid))
+                    {
+                        var entry=zip.GetEntry(imageRel.Path);
+                        if(entry is null) { warnings.Add("A missing embedded picture was omitted."); return; }
+                        using var stream=entry.Open(); using var bytes=new MemoryStream(); stream.CopyTo(bytes);
+                        var encoded=bytes.ToArray();
+                        if(!RasterHeader.TryRead(encoded, out var header))
+                        { warnings.Add("An unsupported or malformed raster picture was omitted."); return; }
+                        aid=Guid.NewGuid().ToString("N"); assetPaths[imageRel.Path]=aid;
+                        assets[aid]=new(aid,header.MimeType,Convert.ToBase64String(encoded));
+                    }
+                    shape=ReadPicture(shape with {AssetId=aid,Fill=ReadColor(properties,"#00000000")},node,xfrm,warnings);
                 }
                 if(node.Name==P+"graphicFrame")
                 {

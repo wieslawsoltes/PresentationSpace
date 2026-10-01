@@ -99,12 +99,13 @@ public sealed partial class PresentationEditor : UserControl
         _commands.Add(("Resize shape to text", () => FitSelectedText(true)));
         _commands.Add(("Open typography sample", OpenTypographySample));
         BuildTextBodyCommands();
+        BuildPictureCommands();
         _commands.Add(("Slide size Widescreen", () => ResizeSlides(1280, 720)));
         _commands.Add(("Slide size Standard", () => ResizeSlides(960, 720)));
         _commands.Add(("Slide size Portrait", () => ResizeSlides(720, 1280)));
         _commands.Add(("Toggle slide thumbnails",ToggleFilmstrip));
         _commands.Add(("Close format pane",HideInspector));
-        foreach(var tab in new[]{"Home","Insert","Draw","Design","Transitions","Animations","Slide Show","Review","View","Shape Format","Table Design","Help"})
+        foreach(var tab in new[]{"Home","Insert","Draw","Design","Transitions","Animations","Slide Show","Review","View","Shape Format","Table Design","Picture Format","Help"})
         { string title=tab; _commands.Add(("Show "+title+" ribbon",()=>Ribbon.SelectTab(title))); }
     }
     private static Button SmallButton(string text,Action action){var b=new Button{Content=text,FontSize=11,Padding=new(11,4,11,4),MinHeight=0,Height=32,MinWidth=0,VerticalAlignment=VAlign.Center,VerticalContentAlignment=VAlign.Center,CornerRadius=new(4),Background=OfficePalette.Brush("00FFFFFF"),BorderThickness=new(0)};b.Click+=(_,_)=>action();return b;}
