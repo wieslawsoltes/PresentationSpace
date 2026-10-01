@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0 — Picture layout and native picture fidelity
+
+- Add immutable non-destructive picture crops, independent destination offsets, Contain/Cover/Stretch fitting, rectangular/elliptical masks, horizontal/vertical flips and picture-only opacity.
+- Share source/destination calculations between Skia rendering and PPTX export. Imported pictures now follow native stretch/crop framing instead of always being contained inside their shape.
+- Preserve supported `srcRect`, `fillRect`, `flipH`/`flipV`, `alphaModFix`, mask, outline, rotation and alternative text. Native files with picture properties require schema 7; schemas 1–6 remain readable.
+- Deduplicate repeated picture assets and byte-identical aliases into one media part across slides; read supported raster types/dimensions from their signatures rather than trusting filename extensions.
+- Add a reusable explicit-apply Uno PictureLayoutEditor, Picture Format ribbon, undoable commands, and an original editable six-picture sample.
+- Bound decoded-image retention by bytes and entry count, release oversized/disabled entries after drawing, use O(1) LRU updates and avoid per-frame picture shape clones. Reuse drawing paints; cache statistics and explicit image-cache release are public.
+- Add geometry, malformed-input, independent OOXML schema, native round-trip, pixel/cache and real-input browser regressions. Include repeated-picture raster and PPTX benchmarks against 0.9.
+- Not full PowerPoint parity: advanced masks/effects, tiling, EXIF orientation, complete group transforms, native Office qualification and other documented boundaries remain.
+
 ## 0.9.0 — Custom tab alignment and safe inspector commits
 
 - Fix carriage-return-only custom-tab input on Uno Skia; preserve every paragraph when reopening native text/table editors or building the formatting pane.

@@ -49,7 +49,7 @@ jobs:
           ln -s "$PWD/artifacts/site" artifacts/serve/PresentationSpace
           python3 -m http.server 8080 --directory artifacts/serve > artifacts/server.log 2>&1 &
           failed=0
-          for suite in smoke performance chrome typography text-body tabs; do
+          for suite in smoke performance chrome typography text-body tabs pictures; do
             python3 "tools/browser-$suite.py" || failed=1
           done
           # Collect every independent suite's diagnostics, but never deploy if any failed.

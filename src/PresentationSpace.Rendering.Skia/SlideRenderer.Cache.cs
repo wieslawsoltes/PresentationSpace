@@ -63,6 +63,9 @@ public sealed partial class SlideRenderer
 
     private void DrawRetainedShape(SKCanvas canvas, PresentationDocument document, SlideShape shape)
     {
+        // Picture content is drawn directly in slide coordinates, avoiding a shape clone
+        // and translation on each frame. Retained scenes never pin decoded images twice.
+        if (shape.Kind == ShapeKind.Image) { DrawShape(canvas, document, shape); return; }
         // Images are already cheap cached-image draws; do not pin decoded images in retained pictures.
         if (!EnablePictureCache || MaximumCachedPictures <= 0 || PictureCacheBudget <= 0 || shape.Kind == ShapeKind.Image)
         {

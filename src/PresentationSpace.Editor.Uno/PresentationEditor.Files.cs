@@ -117,13 +117,12 @@ public sealed partial class PresentationEditor
         using var codec = SkiaSharp.SKCodec.Create(data);
         if (codec is null) throw new InvalidDataException("This picture could not be decoded.");
         if ((long)codec.Info.Width * codec.Info.Height > 16_000_000) throw new InvalidDataException("Pictures are limited to 16 megapixels.");
-        string extension = Path.GetExtension(file.Name).ToLowerInvariant();
-        string mime = extension is ".jpg" or ".jpeg" ? "image/jpeg" : extension == ".webp" ? "image/webp" : extension == ".gif" ? "image/gif" : "image/png";
+        string mime = RasterHeader.Read(file.Data).MimeType;
         Session.InsertImage(file.Data, mime, file.Name);
         float width = Math.Min(700, Session.Document.Width * .65f), height = width * codec.Info.Height / codec.Info.Width;
         if (height > Session.Document.Height * .75f) { height = Session.Document.Height * .75f; width = height * codec.Info.Width / codec.Info.Height; }
-        Session.Apply("Picture size", shape => shape with { Bounds = new((Session.Document.Width - width) / 2, (Session.Document.Height - height) / 2, width, height) });
-        ShowNormal();
+        Session.Apply("Picture size", shape => shape with { Picture = new() { Fit = PictureFit.Contain }, Bounds = new((Session.Document.Width - width) / 2, (Session.Document.Height - height) / 2, width, height) });
+        ShowNormal(); Ribbon.SelectTab("Picture Format");
     }
 
     private async Task RenameAsync()

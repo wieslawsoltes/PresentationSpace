@@ -12,6 +12,9 @@ public sealed class FormatPane : SessionControl
 {
     private readonly StackPanel _body=new(){Spacing=13,Margin=new(16,14,16,24)};
     private readonly TextBlock _title=OfficePalette.Text("Format Shape",16,true);
+    private PictureLayoutEditor? _pictureEditor;
+    private bool _committingPicture;
+    public void FocusPictureCrop() => _pictureEditor?.FocusCrop();
     private TextLayoutEditor? _textLayoutEditor;
     public void FocusTextLayout() => _textLayoutEditor?.FocusFirstField();
     public void FocusTabStops() => _textLayoutEditor?.FocusTabStops();
@@ -34,7 +37,7 @@ public sealed class FormatPane : SessionControl
     }
     protected override void OnSessionChanged(bool preview)
     {
-        if(_building||_committingTable||Session is not {} s)return;
+        if(_building||_committingTable||_committingPicture||Session is not {} s)return;
         if(preview&&_lastSelection==s.PrimaryShape?.Id)return;
         if(_mode==InspectorMode.Format&&ReferenceEquals(_lastShape,s.PrimaryShape)&&_lastSelection==s.PrimaryShape?.Id&&_body.Children.Count>0)return;
         if(_mode==InspectorMode.Format && _tableEditor is not null && s.PrimaryShape is {Kind:ShapeKind.Table} table && _lastSelection==table.Id && _lastShape?.Bounds==table.Bounds && _lastShape.Rotation==table.Rotation && _lastShape.Opacity==table.Opacity && _lastShape.AlternativeText==table.AlternativeText)
@@ -46,7 +49,7 @@ public sealed class FormatPane : SessionControl
         if(_building||Session is not {} s)return;_building=true;
         try
         {
-            _chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
+            _chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_pictureEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
             if(_mode==InspectorMode.Selection){BuildSelection(s);return;}if(_mode==InspectorMode.Comments){BuildComments(s);return;}
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
@@ -55,6 +58,25 @@ public sealed class FormatPane : SessionControl
             alternative.IsEnabled=!shape.Locked;
             var alternativeTarget=SelectionEditSnapshot.Capture(s);
             alternative.LostFocus+=(_,_)=>{if(!_building&&alternative.Text!=shape.AlternativeText)alternativeTarget.TryApply(s,"Alternative text",x=>x with{AlternativeText=alternative.Text});};_body.Children.Add(alternative);
+            if(shape.Kind==ShapeKind.Image)
+            {
+                Section("Picture crop & layout");
+                if(s.Selection.Count==1)
+                {
+                    var editor=new PictureLayoutEditor{IsEnabled=!shape.Locked}; _pictureEditor=editor; editor.SetValue(PictureModel.Resolve(shape));
+                    var target=SelectionEditSnapshot.Capture(s);
+                    editor.ValueChanged+=(_,picture)=>
+                    {
+                        if(!ReferenceEquals(_pictureEditor,editor)||!target.IsCurrent(s))
+                            throw new InvalidOperationException("The picture changed. Reopen its layout before applying this draft.");
+                        _committingPicture=true;
+                        try { target.TryApply(s,"Picture layout",x=>PictureModel.Apply(x,picture)); _lastShape=s.PrimaryShape; target=SelectionEditSnapshot.Capture(s); }
+                        finally { _committingPicture=false; }
+                    };
+                    _body.Children.Add(editor);
+                }
+                else Hint("Select one picture to enter crop percentages. Ribbon commands apply to all selected pictures.");
+            }
             if(shape.Kind==ShapeKind.Table)
             {
                 Section("Table design & layout");

@@ -18,7 +18,7 @@ public static partial class Geometry
             return MathF.Sqrt(MathF.Pow(p.X - b.X - t * dx, 2) + MathF.Pow(p.Y - b.Y - t * dy, 2)) <= tolerance + shape.StrokeWidth;
         }
         if (!b.Contains(p)) return false;
-        if (shape.Kind == ShapeKind.Ellipse)
+        if (shape.Kind == ShapeKind.Ellipse || shape.Kind == ShapeKind.Image && PictureModel.Resolve(shape).Mask == PictureMask.Ellipse)
         {
             float x = (p.X - b.Center.X) / (b.Width / 2), y = (p.Y - b.Center.Y) / (b.Height / 2);
             return x * x + y * y <= 1;

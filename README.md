@@ -412,3 +412,20 @@ See [Compatibility](docs/compatibility.md) for precise boundaries, including typ
 ## License and attribution
 
 [MIT](LICENSE). Uno Platform and SkiaSharp are open-source dependencies. This project does not bundle Microsoft PowerPoint code, logos or proprietary fonts. PowerPoint and Microsoft are trademarks of Microsoft Corporation. PresentationSpace is independent and is not endorsed by or affiliated with Microsoft.
+
+### Picture framing (0.10)
+
+Select a picture and use **Picture Format** for Fit (Contain), Fill (Cover), Stretch,
+rectangle/ellipse masks, flips, transparency and borders. **Crop & Layout** or
+**Alt+Q → Edit picture layout** opens `PictureLayoutEditor` for independent source
+and destination offsets. Values are percentages, not pixels; press **Enter** in a
+field or **Apply picture layout** to commit the whole valid draft. Positive source
+offsets crop; negative offsets leave transparent outsets. The original raster is
+not rewritten. Unapplied fields are not recovery state.
+
+**Open picture layout sample** appends six editable pictures sharing one original
+asset. `PictureModel` is independent of UI and raster decoding. `PictureSpec` is
+serialized in native schema 7. PPTX stores native picture relationships, crop and
+fill rectangles, flips, pixel transparency and supported geometry; Fit/Cover are
+resolved to equivalent native rectangles at export size rather than preserved as
+persistent application-specific fit modes. See [compatibility](docs/compatibility.md).

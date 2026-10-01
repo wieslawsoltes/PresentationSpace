@@ -5,5 +5,5 @@
     <ProjectReference Include="../../src/PresentationSpace.Rendering.Skia/PresentationSpace.Rendering.Skia.csproj" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.2" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.1" />
-  </ItemGroup>
+  <ProjectReference Include="../../src/PresentationSpace.Formats/PresentationSpace.Formats.csproj" /></ItemGroup>
 </Project>
