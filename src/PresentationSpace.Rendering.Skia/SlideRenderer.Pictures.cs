@@ -52,7 +52,11 @@ public sealed partial class SlideRenderer
         {
             using var data = SKData.CreateCopy(Convert.FromBase64String(asset.Base64)); using var codec = SKCodec.Create(data);
             if (codec is null || codec.Info.Width <= 0 || codec.Info.Height <= 0 || (long)codec.Info.Width * codec.Info.Height > 16_000_000) return null;
-            var image = SKImage.FromEncodedData(data); if (image is null) return null;
+            var encoded = SKImage.FromEncodedData(data); if (encoded is null) return null;
+            SKImage? image = null;
+            try { image = encoded.ToRasterImage(true); }
+            finally { if (!ReferenceEquals(encoded, image)) encoded.Dispose(); }
+            if (image is null) return null;
             long bytes = (long)image.Width * image.Height * 4;
             // Oversized/disabled entries are used for this draw only; do not evict useful small images to retain them.
             if (bytes > budget || maximum == 0) { temporary = true; return image; }
@@ -91,8 +95,19 @@ public sealed partial class SlideRenderer
                     {
                         var s = placement.Source; var d = placement.Destination;
                         paint.Color = SKColors.White.WithAlpha((byte)Math.Clamp((int)Math.Round(picture.Opacity * 255), 0, 255));
-                        canvas.DrawImage(image, new SKRect(s.X,s.Y,s.Right,s.Bottom), new SKRect(d.X,d.Y,d.Right,d.Bottom),
-                            new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None), paint);
+                        // A strict source-rectangle draw can disable mipmap sampling in Skia.
+                        // Map the full image, clip to the cropped destination instead, and keep
+                        // trilinear minification quality for thumbnails and deeply zoomed-out decks.
+                        float sx = d.Width / s.Width, sy = d.Height / s.Height;
+                        var full = new SKRect(d.X - s.X * sx, d.Y - s.Y * sy,
+                            d.X + (image.Width - s.X) * sx, d.Y + (image.Height - s.Y) * sy);
+                        canvas.Save();
+                        try
+                        {
+                            canvas.ClipRect(new(d.X, d.Y, d.Right, d.Bottom));
+                            canvas.DrawImage(image, full, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), paint);
+                        }
+                        finally { canvas.Restore(); }
                     }
                 }
                 else
