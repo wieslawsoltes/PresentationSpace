@@ -57,7 +57,11 @@ public sealed partial class SlideRenderer
             try { image = encoded.ToRasterImage(true); }
             finally { if (!ReferenceEquals(encoded, image)) encoded.Dispose(); }
             if (image is null) return null;
-            long bytes = (long)image.Width * image.Height * 4;
+            // Charge actual row storage: high-bit-depth raster images need not
+            // use four bytes per pixel, and row alignment can add padding.
+            using var pixels = image.PeekPixels();
+            if (pixels is null) { image.Dispose(); return null; }
+            long bytes = (long)pixels.RowBytes * image.Height;
             // Oversized/disabled entries are used for this draw only; do not evict useful small images to retain them.
             if (bytes > budget || maximum == 0) { temporary = true; return image; }
             while (_images.Count > 0 && (_images.Count >= maximum || _imageBytes + bytes > budget)) RemoveImage(_imageLru.First!.Value);

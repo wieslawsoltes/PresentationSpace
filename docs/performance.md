@@ -87,13 +87,20 @@ New crop/mask/fit APIs are not presented as features the baseline already had.
 
 Picture rendering avoids a per-frame positional shape clone and uses a mutable
 O(1) image LRU rather than allocating a replacement cache record on every hit.
-`MaximumCachedImages` and `ImageCacheBudget` limit retained count and estimated
-RGBA pixel bytes; zero disables retention. Oversized images are temporary, and a
-budget change trims on the next image lookup. Statistics exclude compressed bytes,
-cache object metadata, native overhead, temporary decode allocations and GPU memory.
-They are not an exact process-memory limit. Each renderer remains single-thread-
+`MaximumCachedImages` and `ImageCacheBudget` limit retained count and actual
+raster row storage (row bytes × height, including high-bit-depth pixels); zero
+disables retention. Oversized images are temporary, and a budget change trims on the next image lookup. Statistics exclude compressed bytes,
+cache object metadata, native overhead, mipmap storage, temporary decode allocations
+and GPU memory. They are not an exact process-memory limit. Each renderer remains single-thread-
 affine. `ClearImageCache` releases retained images and private picture paints.
 
 No performance numbers are claimed before the driver executes. CI artifacts carry
 raw measurements including unchanged or slower workloads. This is synthetic
 CPU/raster work, not browser FPS, startup or a physical-GPU completion benchmark.
+
+Cropped image drawing retains trilinear mipmap minification rather than reducing
+quality to make the repeated-picture benchmark faster. A full-image mapping plus
+a destination clip avoids the strict source-rectangle path disabling mipmaps;
+high-frequency minification tests cover both cropped and uncropped images.
+Decoded raster pixels are materialized once for retained images. Mipmap/backend
+work can still occur during draws, and first-use decoding is not a warm cache hit.
