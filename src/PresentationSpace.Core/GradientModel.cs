@@ -87,9 +87,10 @@ public static class GradientModel
             var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             float Percent(string value)
             {
-                if (!float.TryParse(value.EndsWith('%') ? value[..^1] : value, NumberStyles.Float, CultureInfo.InvariantCulture, out float n) || !float.IsFinite(n))
-                    throw new InvalidDataException("Use finite, invariant percentages for gradient stops.");
-                return n / 100;
+                if (!double.TryParse(value.EndsWith('%') ? value[..^1] : value, NumberStyles.Float, CultureInfo.InvariantCulture, out double n) || !double.IsFinite(n) || n is < 0 or > 100)
+                    throw new InvalidDataException("Use finite, invariant gradient percentages between 0 and 100.");
+                // Validate before narrowing: 100.000001 must not round down into range.
+                return (float)(n / 100);
             }
             if (fields.Length is < 2 or > 3) throw new InvalidDataException("Each stop is: position% #RRGGBB [opacity%].");
             stops.Add(new(Percent(fields[0]), fields[1].ToUpperInvariant(), fields.Length == 3 ? Percent(fields[2]) : 1));
@@ -97,5 +98,18 @@ public static class GradientModel
         var result = stops.ToImmutable(); Validate(new() { Stops = result }); return result;
     }
     public static string FormatStops(ImmutableArray<GradientStop> stops) => string.Join('\n', stops.Select(s =>
-        FormattableString.Invariant($"{s.Offset * 100:0.#####} {s.Color} {s.Opacity * 100:0.#####}")));
+        $"{FormatPercent(s.Offset)} {s.Color} {FormatPercent(s.Opacity)}"));
+    private static string FormatPercent(float fraction)
+    {
+        // The editor must not modify an imported stop on a no-op Apply. Keep
+        // familiar percentages short, but retain enough digits to round-trip
+        // every finite single-precision fraction (including subnormals).
+        double percent = (double)fraction * 100;
+        for (int digits = 7; digits < 9; digits++)
+        {
+            string text = percent.ToString("G" + digits, CultureInfo.InvariantCulture);
+            if ((float)(double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture) / 100) == fraction) return text;
+        }
+        return percent.ToString("G9", CultureInfo.InvariantCulture);
+    }
 }
