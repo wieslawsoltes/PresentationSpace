@@ -23,7 +23,7 @@ public static partial class PptxCodec
                 var style = TableModel.Style(table, cell);
                 var properties = new XElement(A + "tcPr", V("marL", E(cell.MarginLeft)), V("marR", E(cell.MarginRight)), V("marT", E(cell.MarginTop)), V("marB", E(cell.MarginBottom)),
                     V("anchor", style.VerticalAlignment switch { VerticalAlignment.Middle => "ctr", VerticalAlignment.Bottom => "b", _ => "t" }));
-                properties.Add(TableLine("lnL", cell.Left, shape.Opacity), TableLine("lnR", cell.Right, shape.Opacity), TableLine("lnT", cell.Top, shape.Opacity), TableLine("lnB", cell.Bottom, shape.Opacity), Fill(TableModel.Fill(table, cell), shape.Opacity));
+                properties.Add(TableLine("lnL", cell.Left, shape.Opacity), TableLine("lnR", cell.Right, shape.Opacity), TableLine("lnT", cell.Top, shape.Opacity), TableLine("lnB", cell.Bottom, shape.Opacity), Fill(TableModel.Fill(table, cell), cell.FillGradient, shape.Opacity));
                 var tc = new XElement(A + "tc", body, properties);
                 // DrawingML retains every physical grid cell, including covered continuations.
                 if (r == cell.Row && cell.RowSpan > 1) tc.SetAttributeValue("rowSpan", cell.RowSpan);
@@ -40,7 +40,7 @@ public static partial class PptxCodec
         border.Width == 0 ? new XElement(A + "noFill") : Fill(border.Color, opacity),
         new XElement(A + "prstDash", V("val", border.Dash switch { TableBorderDash.Dash => "dash", TableBorderDash.Dot => "dot", _ => "solid" })));
 
-    private static SlideShape ReadNativeTable(SlideShape shape, XElement xml, ICollection<string> warnings, Func<XElement?, string, string> color)
+    private static SlideShape ReadNativeTable(SlideShape shape, XElement xml, ICollection<string> warnings, Func<XElement?, string, string> color, DrawingColors colors)
     {
         var columns = xml.Element(A + "tblGrid")?.Elements(A + "gridCol").Take(TableModel.MaxColumns + 1).ToArray() ?? [];
         var rows = xml.Elements(A + "tr").Take(TableModel.MaxRows + 1).ToArray();
@@ -64,7 +64,7 @@ public static partial class PptxCodec
         long textLength = 0; var props = xml.Element(A + "tblPr");
         var table = new TableSpec { ColumnWidths = columns.Select(c => Size(c, "w")).ToImmutableArray(), RowHeights = rows.Select(r => Size(r, "h")).ToImmutableArray(),
             HeaderRow = props is not null && Flag(props, "firstRow"), BandedRows = props is not null && Flag(props, "bandRow"), TotalRow = props is not null && Flag(props, "lastRow"), FirstColumn = props is not null && Flag(props, "firstCol"), LastColumn = props is not null && Flag(props, "lastCol"), BandedColumns = props is not null && Flag(props, "bandCol") };
-        bool unsupported = xml.Descendants().Any(e => e.Name == A + "gradFill" || e.Name == A + "blipFill" || e.Name == A + "pattFill" || e.Name == A + "lnTlToBr" || e.Name == A + "lnBlToTr" || e.Name == A + "cell3D");
+        bool unsupported = xml.Descendants().Any(e => e.Name == A + "blipFill" || e.Name == A + "pattFill" || e.Name == A + "lnTlToBr" || e.Name == A + "lnBlToTr" || e.Name == A + "cell3D");
         for (int r = 0; r < rows.Length; r++)
         {
             var physical = rows[r].Elements(A + "tc").Take(columns.Length + 1).ToArray();
@@ -93,6 +93,7 @@ public static partial class PptxCodec
                 TableBorder Border(string name)
                 {
                     var line = p?.Element(A + name); if (line is null) return new();
+                    if (line.Element(A + "gradFill") is not null) warnings.Add("Gradient table borders are not yet rendered.");
                     string dash = (string?)line.Element(A + "prstDash")?.Attribute("val") ?? "solid";
                     if (dash is not ("solid" or "dash" or "dot" or "sysDot") || line.Attribute("cmpd") is { Value: not "sng" }) unsupported = true;
                     float width = 1;
@@ -104,8 +105,9 @@ public static partial class PptxCodec
                     return new() { Color = color(line, "#D8DEE8"), Width = line.Element(A + "noFill") is not null ? 0 : width,
                         Dash = dash switch { "dash" => TableBorderDash.Dash, "dot" or "sysDot" => TableBorderDash.Dot, _ => TableBorderDash.Solid } };
                 }
+                var cellFill = FillElement(p) is { } fillNode ? ReadFill(fillNode, colors, "#FFFFFF", warnings) : new DrawingFill("#FFFFFF", null);
                 var cell = new TableCell { Row = r, Column = c, RowSpan = rs, ColumnSpan = cs, Text = content.Text, TextStyle = content.TextStyle, TextRanges = content.TextRanges,
-                    Fill = color(p, "#FFFFFF"), Left = Border("lnL"), Right = Border("lnR"), Top = Border("lnT"), Bottom = Border("lnB"),
+                    Fill = cellFill.Color, FillGradient = cellFill.Gradient, Left = Border("lnL"), Right = Border("lnR"), Top = Border("lnT"), Bottom = Border("lnB"),
                     MarginLeft = Margin("marL", 9.6f), MarginRight = Margin("marR", 9.6f), MarginTop = Margin("marT", 4.8f), MarginBottom = Margin("marB", 4.8f) };
                 for (int rr = r; rr < r + rs; rr++) for (int cc = c; cc < c + cs; cc++)
                 { int i = rr * columns.Length + cc; if (owners[i] is not null) throw new InvalidDataException("Overlapping DrawingML table merges."); owners[i] = cell; }
@@ -113,7 +115,7 @@ public static partial class PptxCodec
             }
         }
         if (props?.Element(A + "tableStyleId") is not null) warnings.Add("Referenced Office table-style effects are not fully resolved; explicit cell formatting is retained.");
-        if (unsupported) warnings.Add("Table picture/gradient/pattern fills, diagonal/compound borders or 3D effects are simplified.");
+        if (unsupported) warnings.Add("Table picture/pattern fills, diagonal/compound borders or 3D effects are simplified.");
         table = table with { Cells = cells.ToImmutable() }; TableModel.Validate(table);
         return TableModel.Apply(shape with { Text = "", TextRanges = [], TextStyle = table.TextStyle }, table);
     }

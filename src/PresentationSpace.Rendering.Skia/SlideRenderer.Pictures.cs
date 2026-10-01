@@ -91,7 +91,7 @@ public sealed partial class SlideRenderer
                 if (path is not null) canvas.ClipPath(path, SKClipOperation.Intersect, true); else canvas.ClipRect(rectangle);
                 var paint = _picturePaint ??= new SKPaint { IsAntialias = true };
                 // Legacy picture shapes ignored their unused Fill property; preserve that rendering contract.
-                if (shape.Picture is not null) { paint.Color = Color(shape.Fill); canvas.DrawRect(rectangle, paint); }
+                if (shape.Picture is not null || shape.FillGradient is not null) { ConfigureFill(paint, shape.Fill, shape.FillGradient, b, shape.Rotation); canvas.DrawRect(rectangle, paint); paint.Shader = null; }
                 if (image is not null)
                 {
                     var placement = PictureModel.Place(picture, b, image.Width, image.Height);

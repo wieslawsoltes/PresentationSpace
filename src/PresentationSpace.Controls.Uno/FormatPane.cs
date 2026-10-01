@@ -8,7 +8,7 @@ using VAlign=Microsoft.UI.Xaml.VerticalAlignment;
 namespace PresentationSpace.Controls.Uno;
 
 public enum InspectorMode { Format, Selection, Comments }
-public sealed class FormatPane : SessionControl
+public sealed partial class FormatPane : SessionControl
 {
     private readonly StackPanel _body=new(){Spacing=13,Margin=new(16,14,16,24)};
     private readonly TextBlock _title=OfficePalette.Text("Format Shape",16,true);
@@ -37,9 +37,9 @@ public sealed class FormatPane : SessionControl
     }
     protected override void OnSessionChanged(bool preview)
     {
-        if(_building||_committingTable||_committingPicture||Session is not {} s)return;
+        if(_building||_committingTable||_committingPicture||_committingGradient||Session is not {} s)return;
         if(preview&&_lastSelection==s.PrimaryShape?.Id)return;
-        if(_mode==InspectorMode.Format&&ReferenceEquals(_lastShape,s.PrimaryShape)&&_lastSelection==s.PrimaryShape?.Id&&_body.Children.Count>0)return;
+        if(_mode==InspectorMode.Format&&ReferenceEquals(_lastShape,s.PrimaryShape)&&_lastSelection==s.PrimaryShape?.Id&&_body.Children.Count>0&&(s.PrimaryShape is not null||ReferenceEquals(_lastSlide,s.CurrentSlide)))return;
         if(_mode==InspectorMode.Format && _tableEditor is not null && s.PrimaryShape is {Kind:ShapeKind.Table} table && _lastSelection==table.Id && _lastShape?.Bounds==table.Bounds && _lastShape.Rotation==table.Rotation && _lastShape.Opacity==table.Opacity && _lastShape.AlternativeText==table.AlternativeText)
         { _lastShape=table; _tableEditor.IsEnabled=!table.Locked; _tableEditor.SetValue(TableModel.Get(table)); return; }
         Rebuild();
@@ -49,10 +49,10 @@ public sealed class FormatPane : SessionControl
         if(_building||Session is not {} s)return;_building=true;
         try
         {
-            _chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_pictureEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
+            _gradientEditor=null;_lastSlide=s.CurrentSlide;_chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_pictureEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
             if(_mode==InspectorMode.Selection){BuildSelection(s);return;}if(_mode==InspectorMode.Comments){BuildComments(s);return;}
             var shape=s.PrimaryShape;
-            if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color}));Hint("Select an object to edit its size, position, text and appearance.");return;}
+            if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color,BackgroundGradient=null}));BuildGradientEditor(s,null);Hint("Select an object to edit its size, position, text and appearance.");return;}
             Hint(shape.Name+(s.Selection.Count>1?$" · {s.Selection.Count} objects selected":""));
             Section("Accessibility");var alternative=new TextBox{Header="Alternative text",AcceptsReturn=true,Text=shape.AlternativeText,TextWrapping=TextWrapping.Wrap,FontSize=12};
             alternative.IsEnabled=!shape.Locked;
@@ -106,7 +106,8 @@ public sealed class FormatPane : SessionControl
                 }
                 else Hint("Select one chart to edit its data and design.");
             }
-            else if(shape.Kind!=ShapeKind.Table) {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color}));}
+            else if(shape.Kind!=ShapeKind.Table) {Section("Fill");Palette(color=>s.Apply("Shape fill",x=>x with{Fill=color,FillGradient=null}));}
+            BuildGradientEditor(s,shape);
             Section("Size & position");
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));
             NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,8,16384)}}));

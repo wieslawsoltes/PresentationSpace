@@ -104,3 +104,11 @@ a destination clip avoids the strict source-rectangle path disabling mipmaps;
 high-frequency minification tests cover both cropped and uncropped images.
 Decoded raster pixels are materialized once for retained images. Mipmap/backend
 work can still occur during draws, and first-use decoding is not a warm cache hit.
+
+## 0.11 fill rendering and shared import work
+
+The current identical-driver comparison uses immutable 0.10 `0116707606c265af50122656571fb3d93a278ffd`. Existing picture, media export, text, deck and table workloads remain active. A new workload imports 120 ordinary solid/text slides that share layouts and a master/theme; both versions import the exact same generated file. It isolates shared XML reuse rather than pretending that 0.10 supported editable gradients. Eight warmups are excluded; results must be read from the executed run, not assumed from architecture.
+
+Gradients have a per-renderer O(1) LRU limited by default to 128 entries and 256 KiB of estimated stop/shader data. Disabled/oversized entries use temporary wrappers; `ClearGradientCache` releases explicit shader ownership. Retained SKPictures may also hold native shader references, and process/GPU/mipmap/font/XML overhead is not measured by this budget. Different geometry can create distinct entries. Solid fills do not allocate a gradient or shader. Repeated parsed layout/master/theme XML is retained for the duration of one import with a 64-part / 4 MiB serialized-byte cap; transient parser allocations and decoded XML heap size are additional costs.
+
+Headless gradient cases check actual pixel colors/transparency, masks, cache invalidation, host state, eviction and disposal/reuse. `browser-gradients.py` uses native keyboard commands and fields for shape/background/cell fills, invalid drafts, undo/redo, resize and compact authoring. These are functional tests, not physical-GPU timings or PowerPoint visual-differential certification.

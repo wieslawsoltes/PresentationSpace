@@ -56,6 +56,7 @@ public sealed partial class PresentationEditor
         yield return new("Picture Style",Menu("picture-mask","Crop to\nShape","\uE91B",Enum.GetValues<PictureMask>().Select(m=>(m.ToString(),(Action)(()=>EditPicture("Picture shape",p=>p with{Mask=m}))))),
             Menu("picture-alpha","Transparency","\uE790",new[]{0,25,50,75}.Select(n=>(n+"%",(Action)(()=>EditPicture("Picture transparency",p=>p with{Opacity=1-n/100f}))))),
             Colors("picture-border","Border","\uE70F",color=>Session.Apply("Picture border",s=>s.Kind==ShapeKind.Image?s with{Stroke=color,StrokeWidth=Math.Max(1,s.StrokeWidth)}:s),true));
+        yield return new("Background",GradientMenu());
         yield return new("Arrange",Cmd("picture-flip-h","Flip\nHorizontal","\uE8AB",()=>EditPicture("Flip picture horizontally",p=>p with{FlipHorizontal=!p.FlipHorizontal})),
             Cmd("picture-flip-v","Flip\nVertical","\uE8AA",()=>EditPicture("Flip picture vertically",p=>p with{FlipVertical=!p.FlipVertical})),
             Menu("picture-arrange","Arrange","\uE8A1",ArrangeActions()));

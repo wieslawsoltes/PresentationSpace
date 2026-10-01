@@ -5,7 +5,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
 
-// This exact driver is compiled against both the immutable 0.9 baseline and the changed source in CI.
+// This exact driver is compiled against both the immutable 0.10 baseline and the changed source in CI.
 // CPU/raster benchmark, not a hardware-GPU benchmark or an end-to-end browser FPS claim.
 var results = new List<object>();
 void Measure(string name, int iterations, Action<int> work)
@@ -39,7 +39,7 @@ Measure("lookup-512-cells-in-64x64-table", 80, iteration =>
 });
 TableLayout? layoutSink = null;
 Measure("layout-64x64-table-at-changing-bounds", 80, i => layoutSink = new TableLayout(table, new(i % 10, 0, 1280, 720)));
-// Public APIs are intentionally shared with the 0.9 baseline. Warm layout and
+// Public APIs are intentionally shared with the 0.10 baseline. Warm layout and
 // first-use shaping are separate workloads; report both, not only cache hits.
 var paragraph = SlideFactory.Text(string.Join(" ", Enumerable.Repeat("Office typography: AVATAR, efficient spaces and shared measurements.", 40)), 0, 0, 620, 700, 18);
 paragraph = paragraph with { TextRanges = [new(7, 10, new() { FontSize = 25, Bold = true })] };
@@ -80,6 +80,12 @@ Measure("draw-warm-128-reused-pictures",80,_=>pictureRenderer.Render(surface.Can
 var mediaDeck=pictures with{Slides=Enumerable.Range(0,24).Select(i=>new Slide{Shapes=[picture with{Id=Guid.NewGuid()}]}).ToImmutableArray()};
 int repeatedPicturePptxBytes=0;
 Measure("export-24-slides-sharing-one-picture",12,_=>repeatedPicturePptxBytes=PresentationSpace.Formats.PptxCodec.Export(mediaDeck).Data.Length);
+// Both revisions import the same native solid/text deck. This isolates shared
+// layout/master/theme XML parsing instead of benchmarking unsupported old gradients.
+var importDeck = new PresentationDocument { Slides = Enumerable.Range(0, 120).Select(i => new Slide {
+    LayoutName = "Title only", Shapes = [SlideFactory.Text("Slide " + i, 50, 40, 1100, 100)] }).ToImmutableArray() };
+byte[] importBytes = PresentationSpace.Formats.PptxCodec.Export(importDeck).Data;
+Measure("import-120-slides-sharing-layout-and-theme", 20, _ => sink = PresentationSpace.Formats.PptxCodec.Import(importBytes).Document);
 GC.KeepAlive(heightSink);
 GC.KeepAlive(cellSink); GC.KeepAlive(layoutSink);
 GC.KeepAlive(sink);

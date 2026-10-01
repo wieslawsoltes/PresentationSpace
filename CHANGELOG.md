@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0 — Native gradient fills and theme color resolution
+
+- Add immutable linear gradients with 2–64 stops, independent alpha, duplicate-position hard edges, scaled/unscaled direction and rotate-with-shape geometry.
+- Share gradient rendering across shape/picture backing fills, slide backgrounds, table cells, previews, slide show, PNG and PDF. Update retained-scene, shape and thumbnail invalidation; bounded shader LRU supports temporary ownership and host unload/reload.
+- Add reusable explicit-apply Uno gradient controls, shape/background/table commands and an editable gradient sample. Solid-fill choices remove gradients; normalized stops survive resize and undo/redo.
+- Preserve supported native `gradFill`, `gsLst`, `lin`, alpha and rotation/scaling flags. Resolve matching layout/master fill inheritance and theme fill/background references, including placeholder colors.
+- Resolve the theme related to each master and color-map overrides; share RGB/system/theme alpha, luminance, saturation, tint and shade handling. Unsupported modes produce warnings.
+- Cache bounded shared XML parts during import. Extend same-driver benchmarks with repeated layout/theme imports and add model, native schema, round-trip, pixel/cache and real-input browser regressions.
+- Native gradient documents require schema 8; schemas 1–7 remain readable. This is not full theme/master, radial/tiled gradient or native PowerPoint equivalence; see compatibility documentation.
+
 ## 0.10.0 — Picture layout and native picture fidelity
 
 - Add immutable non-destructive picture crops, independent destination offsets, Contain/Cover/Stretch fitting, rectangular/elliptical masks, horizontal/vertical flips and picture-only opacity.

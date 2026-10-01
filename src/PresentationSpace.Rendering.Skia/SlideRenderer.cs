@@ -24,8 +24,11 @@ public sealed partial class SlideRenderer : IDisposable
         try
         {
             canvas.ClipRect(new(0, 0, document.Width, document.Height));
-            using (var background = new SKPaint { Color = Color(slide.Background, SKColors.White) })
+            using (var background = new SKPaint())
+            {
+                ConfigureFill(background, slide.Background, slide.BackgroundGradient, new(0, 0, document.Width, document.Height));
                 canvas.DrawRect(0, 0, document.Width, document.Height, background);
+            }
             foreach (var shape in slide.Shapes)
             {
                 if (shape.Hidden || shape.Opacity <= 0) continue;
@@ -61,7 +64,8 @@ public sealed partial class SlideRenderer : IDisposable
             return;
         }
         var b = s.Bounds; var r = new SKRect(b.X,b.Y,b.Right,b.Bottom);
-        using var fill = new SKPaint { IsAntialias = true, Color = Color(s.Fill) };
+        using var fill = new SKPaint { IsAntialias = true };
+        ConfigureFill(fill, s.Fill, s.FillGradient, b, s.Rotation);
         using var stroke = new SKPaint { IsAntialias = true, Color = Color(s.Stroke), Style = SKPaintStyle.Stroke, StrokeWidth = s.StrokeWidth, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
         switch (s.Kind)
         {
