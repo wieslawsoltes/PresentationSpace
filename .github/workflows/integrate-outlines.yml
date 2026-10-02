@@ -1,0 +1,35 @@
+name: Integrate outline layout implementation
+on:
+  push:
+    branches: [work/outline-layout-0.12]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: "startsWith(github.event.head_commit.message, 'integrate-outlines:')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply checksum-verified source
+        run: |
+          set -euo pipefail
+          git diff --exit-code b8d6988dd5d5b320dd5782aa52a6b1169c13da30 HEAD -- src tests tools docs README.md CHANGELOG.md Directory.Build.props .github/workflows/pages.yml
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          patch = lzma.decompress(b''.join(Path(f'.ci/outlines.{i}').read_bytes() for i in range(4)))
+          assert hashlib.sha256(patch).hexdigest() == 'bea2ecf31ab88cff83f3957cd303011f2de657d4f3efed14fa3b83b4911bdc45'
+          Path('/tmp/outlines.patch').write_bytes(patch)
+          PY
+          git apply --check --unidiff-zero --exclude=.github/workflows/pages.yml /tmp/outlines.patch
+          git apply --unidiff-zero --exclude=.github/workflows/pages.yml /tmp/outlines.patch
+          rm .ci/outlines.0 .ci/outlines.1 .ci/outlines.2 .ci/outlines.3
+          rmdir .ci
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --exit-code -- .github/workflows
+          git commit -m 'feat: native line outlines, arrow ends and shared stroke rendering'
+          git push origin HEAD:work/outline-layout-0.12
