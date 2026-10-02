@@ -19,6 +19,22 @@ with sync_playwright() as p:
         before = int(value('data-command-version')); page.keyboard.press('Alt+q')
         page.wait_for_function("() => document.activeElement?.id === 'uno-input' && document.activeElement.tagName === 'INPUT' && document.activeElement.value === ''", timeout=20000)
         page.keyboard.type(text); page.keyboard.press('Enter'); attr('data-command-version', before + 1)
+    def resize(width, height):
+        page.set_viewport_size({'width': width, 'height': height})
+        # Playwright's viewport change is not an Uno layout completion fence.
+        # Do not send Alt+Q while the old compact search host is being collapsed.
+        # Wait for the arranged workspace and responsive search-host selection,
+        # without setting focus, retrying the command, or relaxing its assertion.
+        page.wait_for_function("""([width, height]) => {
+            const raw = document.documentElement.getAttribute('data-ui-chrome');
+            if (!raw) return false;
+            const ui = JSON.parse(raw), title = ui['title-bar'], workspace = ui['workspace'];
+            const status = ui['status-bar'], search = ui['command-search'], more = ui['quick-more'];
+            return Math.abs(title.width - width) < 1 && Math.abs(workspace.width - width) < 1
+                && status.height > 0 && Math.abs(status.y + status.height - height) < 1
+                && search.visible === (width >= 1180) && more.visible === (width < 1180)
+                && (width < 1180 || (search.width > 0 && search.x + search.width <= width));
+        }""", arg=[width, height], timeout=20000)
     def shot(name):
         page.evaluate('() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
         page.screenshot(path=str(out / (name + '.png')))
@@ -55,8 +71,7 @@ with sync_playwright() as p:
         command('Undo'); attr('data-gradient-count', 3)
         command('Close format pane'); command('Slide size Standard'); attr('data-slide-width', 960); attr('data-gradient-stops', custom)
         command('Undo'); attr('data-slide-width', 1280)
-        page.set_viewport_size({'width': 720, 'height': 620})
-        page.wait_for_function('() => JSON.parse(document.documentElement.getAttribute("data-ui-chrome"))["title-bar"].width === 720')
+        resize(720, 620)
         compact = '0 #157F9C 100\n100 #D9BEED 40'
         stops(compact); attr('data-gradient-stops', compact); shot('gradient-layout-compact')
         background = '0 #071D32 100\n100 #26365C 100'
@@ -64,7 +79,7 @@ with sync_playwright() as p:
         attr('data-gradient-stops', background); attr('data-background-gradient', 'true')
         command('Remove background gradient'); attr('data-background-gradient', 'false')
         command('Undo'); attr('data-background-gradient', 'true'); attr('data-gradient-stops', background)
-        command('Close format pane'); page.set_viewport_size({'width': 1440, 'height': 1000})
+        command('Close format pane'); resize(1440, 1000)
         command('New slide'); page.keyboard.press('Control+a'); page.keyboard.press('Delete'); attr('data-shape-count', 0)
         command('Insert table'); command('Table select all'); command('Table gradient Ocean'); attr('data-table-gradients', 12)
         command('Undo'); attr('data-table-gradients', 0)
@@ -73,9 +88,20 @@ with sync_playwright() as p:
         shot('gradient-table-pane')
         command('Close format pane'); page.keyboard.press('Shift+F5'); attr('data-presenting', 'true'); shot('gradient-table-show')
         page.keyboard.press('Escape'); attr('data-presenting', 'false')
+        # Cross the exact search-host breakpoint in both directions. Every
+        # command is issued once and still requires an empty focused native input.
+        command('Close format pane')
+        for width in [720, 1180, 1179, 1440, 720, 1440]:
+            resize(width, 620 if width < 1180 else 1000)
+            version = int(value('data-command-version'))
+            command('Show Home ribbon'); attr('data-ribbon-tab', 'Home')
+            command('Show Shape Format ribbon'); attr('data-ribbon-tab', 'Shape Format')
+            assert int(value('data-command-version')) == version + 2
+            attr('data-table-gradients', 12)
+            observations.append({'width': width, 'commandVersion': version + 2, 'gradientCells': value('data-table-gradients')})
         observations.append({'slideCount': value('data-slide-count'), 'gradientCells': value('data-table-gradients')})
         assert not errors, errors
-        print('PASS: gradient presets, actual stop/angle entry, invalid drafts, backgrounds/cells, undo/redo, scaling and compact authoring.', flush=True)
+        print('PASS: gradient presets, actual stop/angle entry, invalid drafts, backgrounds/cells, undo/redo, scaling, compact authoring and repeated responsive search transitions.', flush=True)
     except Exception:
         failures.append(traceback.format_exc()); raise
     finally:
