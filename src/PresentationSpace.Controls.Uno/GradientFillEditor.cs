@@ -20,11 +20,12 @@ public sealed class GradientFillEditor : UserControl
     private GradientFill? _value;
     private bool _applying;
     public event EventHandler<GradientFill?>? ValueChanged;
-    public GradientFillEditor()
+    public GradientFillEditor() : this("gradient") { }
+    public GradientFillEditor(string automationPrefix)
     {
-        AutomationProperties.SetAutomationId(this, "gradient-fill-editor");
-        AutomationProperties.SetAutomationId(_angle, "gradient-angle");
-        AutomationProperties.SetAutomationId(_stops, "gradient-stops");
+        AutomationProperties.SetAutomationId(this, automationPrefix + "-fill-editor");
+        AutomationProperties.SetAutomationId(_angle, automationPrefix + "-angle");
+        AutomationProperties.SetAutomationId(_stops, automationPrefix + "-stops");
         AutomationProperties.SetName(_stops, "Gradient stops: position, RGB color and opacity");
         var body = new StackPanel { Spacing = 7 };
         var hint = new TextBlock { Text = "One stop per line: 0 #D35230 100. Positions and opacity are percentages. Equal positions create a sharp color boundary.", FontSize = 11, TextWrapping = TextWrapping.Wrap };
@@ -33,7 +34,7 @@ public sealed class GradientFillEditor : UserControl
         _enabled.Checked += (_, _) => _options.Visibility = Visibility.Visible;
         _enabled.Unchecked += (_, _) => _options.Visibility = Visibility.Collapsed;
         var apply = new Button { Content = "Apply gradient fill", MinWidth = 0, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Stretch };
-        AutomationProperties.SetAutomationId(apply, "gradient-apply"); apply.Click += (_, _) => Apply();
+        AutomationProperties.SetAutomationId(apply, automationPrefix + "-apply"); apply.Click += (_, _) => Apply();
         _angle.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { Apply(); e.Handled = true; } };
         _stops.KeyDown += (_, e) =>
         {

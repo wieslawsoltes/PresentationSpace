@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.0 — Native outlines, line layout and reusable stroke rendering
+
+- Add immutable outline settings: 11 preset dashes, up to 32 custom dash/gap pairs, caps, joins, miter limit, independent begin/end markers and linear gradient strokes.
+- Retain line flips and zero-width/zero-height extents in native files, DrawingML, rendering and hit testing. Preserve collapsed segments without undefined directions; suppress all drawing for zero-width outlines.
+- Fix closed shapes misclassified as arrows merely because `tailEnd` is present. Import supported grouped connectors rather than silently dropping them; connector attachment/routing is still not retained.
+- Resolve sparse direct/layout/master outlines and theme line references with supported placeholder colors, fill transforms and explicit no-fill. Preserve native dash, cap, join, marker, width and gradient definitions; warn on unsupported compound/inset styles.
+- Add reusable explicit-apply `OutlineEditor`, independent outline-gradient authoring, ribbon/search commands, append-only sample and diagnostics. Stale/locked drafts cannot partially commit; solid outline colors clear gradient overrides.
+- Reuse direct-line paints and bounded O(1) dash effects. Remove uncached positional line clones while retaining the local coordinate frame, and include all stroke/direction state in retained-picture invalidation.
+- Add model, native schema/interchange, pixel/resource and real-input browser regressions. Extend identical-driver benchmarks with direct solid lines and byte-identical cross-version import fixtures.
+- New native properties require schema 9; schemas 1–8 remain readable. Compound/inset strokes, arbitrary connector paths and exact native Office marker sizing remain outside the implemented subset.
+
 ## 0.11.0 — Native gradient fills and theme color resolution
 
 - Add immutable linear gradients with 2–64 stops, independent alpha, duplicate-position hard edges, scaled/unscaled direction and rotate-with-shape geometry.

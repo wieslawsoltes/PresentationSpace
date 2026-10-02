@@ -33,6 +33,7 @@ public sealed partial class SlideRenderer
     {
         _textLayout.Clear();
         ClearGradientCache();
+        ClearStrokeCache();
         ClearPictureCache();
     }
     private void ClearPictureCache()
@@ -58,7 +59,7 @@ public sealed partial class SlideRenderer
     }
     private static bool SameDrawing(SlideShape a, SlideShape b) => ReferenceEquals(a, b) ||
         a.Kind == b.Kind && a.Bounds.Width == b.Bounds.Width && a.Bounds.Height == b.Bounds.Height &&
-        a.Fill == b.Fill && a.FillGradient == b.FillGradient && a.Rotation == b.Rotation && a.Stroke == b.Stroke && a.StrokeWidth == b.StrokeWidth &&
+        a.Fill == b.Fill && a.FillGradient == b.FillGradient && a.Rotation == b.Rotation && a.Stroke == b.Stroke && a.StrokeWidth == b.StrokeWidth && a.Outline == b.Outline && a.LineDirection == b.LineDirection &&
         a.Text == b.Text && a.TextStyle == b.TextStyle && a.TextBox == b.TextBox && a.TextRanges == b.TextRanges &&
         ReferenceEquals(a.Chart, b.Chart) && ReferenceEquals(a.Table, b.Table) && a.Cells == b.Cells &&
         a.Labels == b.Labels && a.Values == b.Values && a.TableColumns == b.TableColumns;
@@ -68,14 +69,19 @@ public sealed partial class SlideRenderer
         // Picture content is drawn directly in slide coordinates, avoiding a shape clone
         // and translation on each frame. Retained scenes never pin decoded images twice.
         if (shape.Kind == ShapeKind.Image) { DrawShape(canvas, document, shape); return; }
-        // Images are already cheap cached-image draws; do not pin decoded images in retained pictures.
-        if (!EnablePictureCache || MaximumCachedPictures <= 0 || PictureCacheBudget <= 0 || shape.Kind == ShapeKind.Image)
+        if (!EnablePictureCache || MaximumCachedPictures <= 0 || PictureCacheBudget <= 0)
         {
+            // Use the same local geometry and translation as recorded pictures.
+            // Absolute and translated curve coordinates can rasterize differently
+            // after rotation. Plain lines accept a bounds override, avoiding a
+            // positional shape allocation without changing their coordinate frame.
+            var local = new RectF(0, 0, shape.Bounds.Width, shape.Bounds.Height);
             canvas.Save();
             try
             {
                 canvas.Translate(shape.Bounds.X, shape.Bounds.Y);
-                DrawShape(canvas, document, shape with { Bounds = new(0, 0, shape.Bounds.Width, shape.Bounds.Height) });
+                if (StrokeModel.IsLine(shape) && string.IsNullOrEmpty(shape.Text)) DrawLineCore(canvas, shape, local);
+                else DrawShape(canvas, document, shape with { Bounds = local });
             }
             finally { canvas.Restore(); }
             return;
@@ -93,7 +99,7 @@ public sealed partial class SlideRenderer
         {
             _misses++;
             using var recorder = new SKPictureRecorder();
-            float bleed = Math.Max(2, shape.StrokeWidth * 4 + (shape.Kind == ShapeKind.Arrow ? 20 : 0));
+            float bleed = StrokeModel.Outset(shape);
             var recording = recorder.BeginRecording(new(-bleed, -bleed, shape.Bounds.Width + bleed, shape.Bounds.Height + bleed));
             DrawShape(recording, document, shape with { Bounds = new(0, 0, shape.Bounds.Width, shape.Bounds.Height) });
             picture = recorder.EndRecording();

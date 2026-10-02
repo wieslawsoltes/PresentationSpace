@@ -124,8 +124,9 @@ public sealed partial class SlideRenderer
             if (shape.StrokeWidth > 0)
             {
                 var line = _pictureStroke ??= new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke };
-                line.Color = Color(shape.Stroke); line.StrokeWidth = shape.StrokeWidth;
-                if (path is not null) canvas.DrawPath(path, line); else canvas.DrawRect(rectangle, line);
+                ConfigureStroke(line, shape);
+                try { if (path is not null) canvas.DrawPath(path, line); else canvas.DrawRect(rectangle, line); }
+                finally { line.PathEffect = null; line.Shader = null; }
             }
         }
         finally { canvas.Restore(); if (temporary) image?.Dispose(); }

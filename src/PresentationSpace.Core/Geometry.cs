@@ -14,8 +14,7 @@ public static partial class Geometry
         var b = shape.Bounds;
         if (shape.Kind is ShapeKind.Line or ShapeKind.Arrow)
         {
-            float dx = b.Width, dy = b.Height, t = Math.Clamp(((p.X - b.X) * dx + (p.Y - b.Y) * dy) / (dx * dx + dy * dy), 0, 1);
-            return MathF.Sqrt(MathF.Pow(p.X - b.X - t * dx, 2) + MathF.Pow(p.Y - b.Y - t * dy, 2)) <= tolerance + shape.StrokeWidth;
+            return StrokeModel.HitLine(shape, p, tolerance);
         }
         if (!b.Contains(p)) return false;
         if (shape.Kind == ShapeKind.Ellipse || shape.Kind == ShapeKind.Image && PictureModel.Resolve(shape).Mask == PictureMask.Ellipse)
@@ -46,14 +45,14 @@ public static partial class Geometry
         bool top = handle is 0 or 1 or 2, bottom = handle is 4 or 5 or 6;
         float w = original.Width + (left ? -delta.X : right ? delta.X : 0);
         float h = original.Height + (top ? -delta.Y : bottom ? delta.Y : 0);
-        if (keepAspect)
+        if (keepAspect && original.Width > 0 && original.Height > 0)
         {
             // Preserve the original horizontal-driven corner contract; vertical side handles use vertical movement.
             float scale = left || right ? w / original.Width : h / original.Height;
             scale = Math.Max(scale, Math.Max(8 / original.Width, 8 / original.Height));
             w = original.Width * scale; h = original.Height * scale;
         }
-        else { w = Math.Max(8, w); h = Math.Max(8, h); }
+        else { w = Math.Max(original.Width == 0 ? 0 : 8, w); h = Math.Max(original.Height == 0 ? 0 : 8, h); }
         float x = left ? original.Right - w : right ? original.X : original.Center.X - w / 2;
         float y = top ? original.Bottom - h : bottom ? original.Y : original.Center.Y - h / 2;
         return new(x, y, w, h);

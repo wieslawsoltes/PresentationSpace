@@ -16,7 +16,15 @@ Office-style slide editing in C# with **Uno Platform** and **SkiaSharp**. One do
 
 </div>
 
-> **0.11 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+> **0.12 development preview.** PresentationSpace is inspired by the PowerPoint desktop workflow. It is not Microsoft software, a pixel-exact reproduction, a complete PowerPoint implementation, or a lossless editor for arbitrary PPTX files. Keep original imported presentations. Supported functionality and remaining gaps are documented below.
+
+## What is new in 0.12
+
+**Editable lines and outlines.** Shape and picture outlines now retain 11 preset dash styles, custom dash/gap pairs, flat/round/square caps, round/bevel/miter joins, independent begin/end decorations and linear gradient strokes. Horizontal, vertical and reversed lines keep their true endpoints, including zero extents. The shared renderer and native DrawingML exporter use the same immutable settings; zero-width strokes stay hidden instead of becoming hairlines.
+
+**Reusable outline authoring.** Select a shape or line and open **Shape Format → Line Style → Edit outline**, or search **Edit outline** with **Alt+Q**. Set width/color, choose dashes/caps/joins, and configure either arrow end. **Custom dashes** uses one `dash gap` pair per line in multiples of the outline width; **Ctrl+Enter** applies the whole valid draft. An empty custom list uses the preset. Outline gradients have a separate explicit-apply editor. Applying one editor refreshes its sibling fields; unapplied drafts are not recovery state. **Open outline sample** appends an editable example without replacing your presentation.
+
+**Native outline fidelity and direct rendering.** PPTX import resolves supported outline properties from matching placeholders and theme line references. Explicit no-fill blocks inherited colors. Line flips, zero-sized axes, custom patterns and marker sizes survive supported interchange. A tail decoration no longer changes an ellipse or other closed shape into an arrow, and grouped connectors are no longer silently dropped. Native `.pspace` files using the new properties require schema 9; schemas 1–8 remain readable. Direct line rendering reuses paints and bounded dash effects, and avoids a positional shape copy on every uncached draw. See [Compatibility](docs/compatibility.md#012-outlines-and-line-layout) and [Performance](docs/performance.md#012-outlines-and-direct-drawing) for the exact scope and measurement method.
 
 ## What is new in 0.11
 

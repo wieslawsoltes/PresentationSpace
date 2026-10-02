@@ -47,7 +47,7 @@ public static partial class PptxCodec
                 new XElement(A + "stretch", PictureRectangle("fillRect", frame.Destination))),
             new XElement(P + "spPr", transform, new XElement(A + "prstGeom", V("prst", picture.Mask == PictureMask.Ellipse ? "ellipse" : "rect"), new XElement(A + "avLst")),
                 Fill(shape.Picture is null ? "#00000000" : shape.Fill, shape.FillGradient, shape.Opacity),
-                new XElement(A + "ln", V("w", E(shape.StrokeWidth)), Fill(shape.Stroke, shape.Opacity))));
+                NativeOutline(shape)));
     }
     private static XElement PictureRectangle(string name, RectF rectangle)
     {

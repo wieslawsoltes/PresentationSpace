@@ -101,6 +101,7 @@ public sealed partial class PresentationEditor : UserControl
         BuildTextBodyCommands();
         BuildPictureCommands();
         BuildGradientCommands();
+        BuildOutlineCommands();
         _commands.Add(("Slide size Widescreen", () => ResizeSlides(1280, 720)));
         _commands.Add(("Slide size Standard", () => ResizeSlides(960, 720)));
         _commands.Add(("Slide size Portrait", () => ResizeSlides(720, 1280)));

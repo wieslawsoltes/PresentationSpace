@@ -57,6 +57,12 @@ public sealed partial class SlideRenderer : IDisposable
     }
     private void DrawShape(SKCanvas c, PresentationDocument d, SlideShape s)
     {
+        if (StrokeModel.IsLine(s))
+        {
+            DrawLineCore(c, s);
+            if (!string.IsNullOrEmpty(s.Text) && s.Bounds.Width > 0 && s.Bounds.Height > 0) DrawRichText(c, s, 12);
+            return;
+        }
         if (s.Kind == ShapeKind.Image)
         {
             DrawPicture(c, d, s);
@@ -66,7 +72,7 @@ public sealed partial class SlideRenderer : IDisposable
         var b = s.Bounds; var r = new SKRect(b.X,b.Y,b.Right,b.Bottom);
         using var fill = new SKPaint { IsAntialias = true };
         ConfigureFill(fill, s.Fill, s.FillGradient, b, s.Rotation);
-        using var stroke = new SKPaint { IsAntialias = true, Color = Color(s.Stroke), Style = SKPaintStyle.Stroke, StrokeWidth = s.StrokeWidth, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
+        using var stroke = new SKPaint(); ConfigureStroke(stroke, s);
         switch (s.Kind)
         {
             case ShapeKind.Ellipse: c.DrawOval(r,fill); if (s.StrokeWidth>0) c.DrawOval(r,stroke); break;
@@ -78,15 +84,6 @@ public sealed partial class SlideRenderer : IDisposable
                     path.MoveTo(b.Center.X,b.Y); path.LineTo(b.Right,s.Kind == ShapeKind.Diamond ? b.Center.Y : b.Bottom);
                     if(s.Kind == ShapeKind.Diamond) path.LineTo(b.Center.X,b.Bottom);
                     path.LineTo(b.X,s.Kind == ShapeKind.Diamond ? b.Center.Y : b.Bottom); path.Close(); c.DrawPath(path,fill); if(s.StrokeWidth>0)c.DrawPath(path,stroke);
-                }
-                break;
-            case ShapeKind.Line:
-            case ShapeKind.Arrow:
-                c.DrawLine(b.X,b.Y,b.Right,b.Bottom,stroke);
-                if(s.Kind == ShapeKind.Arrow)
-                {
-                    float a = MathF.Atan2(b.Height,b.Width), size = Math.Max(12,s.StrokeWidth*4);
-                    using var arrow = new SKPath(); arrow.MoveTo(b.Right,b.Bottom); arrow.LineTo(b.Right-size*MathF.Cos(a-.5f),b.Bottom-size*MathF.Sin(a-.5f)); arrow.LineTo(b.Right-size*MathF.Cos(a+.5f),b.Bottom-size*MathF.Sin(a+.5f)); arrow.Close(); fill.Color=stroke.Color; c.DrawPath(arrow,fill);
                 }
                 break;
             case ShapeKind.Table: DrawTable(c,s); break;

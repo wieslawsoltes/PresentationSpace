@@ -64,6 +64,8 @@ public sealed record SlideShape
     public GradientFill? FillGradient { get; init; }
     public string Stroke { get; init; } = "#00000000";
     public float StrokeWidth { get; init; } = 1.5f;
+    public StrokeSpec? Outline { get; init; }
+    public LineDirection? LineDirection { get; init; }
     public float Opacity { get; init; } = 1;
     public string Text { get; init; } = "";
     public TextStyle TextStyle { get; init; } = new();
@@ -135,6 +137,7 @@ public static class DocumentSerializer
             x.Table is { } t && t.Cells.Any(c => c.FillGradient is not null)))) version = Math.Max(version, 8);
         foreach (var slide in document.Slides) foreach (var shape in slide.Shapes)
         {
+            if (shape.Outline is not null || shape.LineDirection is not null || StrokeModel.IsLine(shape) && (shape.Bounds.Width == 0 || shape.Bounds.Height == 0)) version = Math.Max(version, 9);
             if (shape.Picture is not null) version = Math.Max(version, 7);
             if (shape.Chart is not null) version = Math.Max(version, 2);
             if (shape.Table is { } table)
@@ -161,7 +164,7 @@ public static class DocumentSerializer
     }
     public static void Validate(PresentationDocument d)
     {
-        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
+        if (d.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9)) throw new InvalidDataException($"Unsupported document version {d.SchemaVersion}.");
         if (!float.IsFinite(d.Width) || !float.IsFinite(d.Height) || d.Width < 1 || d.Height < 1 || d.Width > 16384 || d.Height > 16384) throw new InvalidDataException("Invalid slide dimensions.");
         if (d.Slides.IsDefaultOrEmpty || d.Slides.Length > 2000) throw new InvalidDataException("A presentation must contain 1–2,000 slides.");
         var ids = new HashSet<Guid>();
@@ -175,8 +178,10 @@ public static class DocumentSerializer
             {
                 if (++total > 20000 || s is null || !ids.Add(s.Id)) throw new InvalidDataException("Too many shapes or duplicate identifiers.");
                 if (s.FillGradient is { } gradient) { GradientModel.Validate(gradient); if (!GradientModel.Supports(s)) throw new InvalidDataException("Gradient fill is not applicable to this object kind."); }
+                if (s.Outline is { } outline) { StrokeModel.Validate(new StrokeSettings(s.Stroke, s.StrokeWidth, outline)); if (!StrokeModel.Supports(s)) throw new InvalidDataException("Outline properties are not applicable to this object."); }
+                if (s.LineDirection is not null && !StrokeModel.IsLine(s)) throw new InvalidDataException("Line direction requires a line or arrow.");
                 var b = s.Bounds;
-                if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height) || b.Width <= 0 || b.Height <= 0 || Math.Abs(b.X) > 100000 || Math.Abs(b.Y) > 100000 || b.Width > 100000 || b.Height > 100000) throw new InvalidDataException("Invalid shape geometry.");
+                if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height) || (StrokeModel.IsLine(s) ? b.Width < 0 || b.Height < 0 : b.Width <= 0 || b.Height <= 0) || Math.Abs(b.X) > 100000 || Math.Abs(b.Y) > 100000 || b.Width > 100000 || b.Height > 100000) throw new InvalidDataException("Invalid shape geometry.");
                 if (s.TextStyle is null || !float.IsFinite(s.TextStyle.FontSize) || s.TextStyle.FontSize < 1 || s.TextStyle.FontSize > 2048 || !float.IsFinite(s.Rotation) || !float.IsFinite(s.Opacity) || s.Opacity < 0 || s.Opacity > 1 || !float.IsFinite(s.StrokeWidth) || s.StrokeWidth < 0 || s.StrokeWidth > 1000 || !float.IsFinite(s.TextStyle.LineSpacing) || s.TextStyle.LineSpacing <= 0 || s.TextStyle.LineSpacing > 10) throw new InvalidDataException("Invalid shape styling.");
                 if (s.Text is null || s.Text.Length > TextFlow.MaximumTextLength || s.TextRanges.IsDefault || !Enum.IsDefined(s.Placeholder) || s.PlaceholderIndex < 0) throw new InvalidDataException("Invalid text or placeholder.");
                 if (s.Picture is { } picture)

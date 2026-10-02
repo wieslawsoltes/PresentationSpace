@@ -30,7 +30,7 @@ public sealed partial class PresentationEditor
         ToolTipService.SetToolTip(_bold,"Bold");ToolTipService.SetToolTip(_italic,"Italic");ToolTipService.SetToolTip(_underline,"Underline");fontRow.Children.Add(_bold);fontRow.Children.Add(_italic);fontRow.Children.Add(_underline);fontRow.Children.Add(Cmd("grow-font","","\uE8E8",()=>Viewport.FormatText("Increase font size",style=>style with{FontSize=Math.Min(512,style.FontSize+2)}),false));fontRow.Children.Add(Cmd("shrink-font","","\uE8E7",()=>Viewport.FormatText("Decrease font size",style=>style with{FontSize=Math.Max(1,style.FontSize-2)}),false));fontRow.Children.Add(Colors("font-color","A  ⌄","\uE8D3",color=>Viewport.FormatText("Font color",style=>style with{Color=color})));fontPanel.Children.Add(fontRow);yield return new("Font",fontPanel);
         var paragraph=new StackPanel{Spacing=5,Margin=new(2,4,2,0)};var p1=new StackPanel{Orientation=Orientation.Horizontal};p1.Children.Add(Cmd("bullets","","\uE8FD",Viewport.ToggleBullets,false));p1.Children.Add(Menu("line-spacing","Spacing  ⌄","\uE8F1",new[]{1f,1.15f,1.5f,2f}.Select(value=>(value.ToString(CultureInfo.InvariantCulture),(Action)(()=>Viewport.FormatParagraph("Line spacing",style=>style with{LineSpacing=value})))),false));paragraph.Children.Add(p1);
         var p2=new StackPanel{Orientation=Orientation.Horizontal};p2.Children.Add(Cmd("align-text-left","","\uE8E4",()=>TextAlign(ParagraphAlignment.Left),false));p2.Children.Add(Cmd("align-text-center","","\uE8E3",()=>TextAlign(ParagraphAlignment.Center),false));p2.Children.Add(Cmd("align-text-right","","\uE8E2",()=>TextAlign(ParagraphAlignment.Right),false));paragraph.Children.Add(p2);yield return new("Paragraph",paragraph);
-        yield return new("Drawing",Menu("shapes","Shapes  ⌄","\uE91B",ShapeActions()),RibbonGroup.Column(Colors("shape-fill","Shape Fill  ⌄","\uE790",color=>Session.Apply("Shape fill",s=>s with{Fill=color,FillGradient=null})),Colors("shape-outline","Shape Outline  ⌄","\uE70F",color=>Session.Apply("Shape outline",s=>s with{Stroke=color})),Cmd("format-pane","Format Shape","\uE713",()=>ShowInspector(InspectorMode.Format),false)));
+        yield return new("Drawing",Menu("shapes","Shapes  ⌄","\uE91B",ShapeActions()),RibbonGroup.Column(Colors("shape-fill","Shape Fill  ⌄","\uE790",color=>Session.Apply("Shape fill",s=>s with{Fill=color,FillGradient=null})),Colors("shape-outline","Shape Outline  ⌄","\uE70F",color=>Session.Apply("Shape outline",s=>StrokeModel.SolidColor(s,color))),Cmd("format-pane","Format Shape","\uE713",()=>ShowInspector(InspectorMode.Format),false)));
         yield return new("Arrange",Menu("arrange","Arrange  ⌄","\uE8A1",ArrangeActions()));
         yield return new("Editing",RibbonGroup.Column(Cmd("find","Find / Replace","\uE721",()=>Run(FindReplaceAsync),false),Cmd("select","Select All","\uE8B3",Session.SelectAll,false),Cmd("selection-pane","Selection Pane","\uE8A4",()=>ShowInspector(InspectorMode.Selection),false)));
     }
@@ -52,7 +52,7 @@ public sealed partial class PresentationEditor
     private IEnumerable<RibbonGroup> DrawGroups()
     {
         yield return new("Drawing tools",Cmd("draw-line","Line","\uE70F",()=>Insert(ShapeKind.Line)),Cmd("draw-arrow","Arrow","\uE72A",()=>Insert(ShapeKind.Arrow)),Menu("draw-shapes","Shapes  ⌄","\uE91B",ShapeActions()));
-        yield return new("Style",Colors("draw-outline","Line Color","\uE790",color=>Session.Apply("Line color",s=>s with{Stroke=color}),true),Menu("draw-width","Line Width","\uE8E4",new[]{1f,2,3,4,6,8}.Select(w=>(w+" px",(Action)(()=>Session.Apply("Line width",s=>s with{StrokeWidth=w}))))));
+        yield return new("Style",Colors("draw-outline","Line Color","\uE790",color=>Session.Apply("Line color",s=>StrokeModel.SolidColor(s,color)),true),Menu("draw-width","Line Width","\uE8E4",new[]{1f,2,3,4,6,8}.Select(w=>(w+" px",(Action)(()=>Session.Apply("Line width",s=>s with{StrokeWidth=w}))))));
     }
     private IEnumerable<RibbonGroup> DesignGroups()
     {
@@ -96,7 +96,7 @@ public sealed partial class PresentationEditor
     private IEnumerable<RibbonGroup> FormatGroups()
     {
         yield return new("Insert Shapes",Menu("format-shapes","Shapes  ⌄","\uE91B",ShapeActions()),Cmd("format-text","Text Box","\uE8D2",()=>Insert(ShapeKind.Text)));
-        yield return new("Shape Styles",GradientMenu(),Colors("format-fill","Shape Fill","\uE790",color=>Session.Apply("Shape fill",s=>s with{Fill=color,FillGradient=null}),true),Colors("format-outline","Outline","\uE70F",color=>Session.Apply("Shape outline",s=>s with{Stroke=color}),true));
+        yield return new("Shape Styles",OutlineMenu(),GradientMenu(),Colors("format-fill","Shape Fill","\uE790",color=>Session.Apply("Shape fill",s=>s with{Fill=color,FillGradient=null}),true),Colors("format-outline","Outline","\uE70F",color=>Session.Apply("Shape outline",s=>StrokeModel.SolidColor(s,color)),true));
         yield return new("Arrange",Menu("format-arrange","Arrange  ⌄","\uE8A1",ArrangeActions()),Cmd("rotate-right","Rotate\nRight 90°","\uE7AD",()=>Session.Apply("Rotate right",s=>s with{Rotation=(s.Rotation+90)%360})));
         yield return new("Text body", Cmd("text-layout-pane", "Text Box\nLayout", "\uE8D2", () => OpenTextBodyEditor()),
             Cmd("custom-tab-pane", "Custom\nTabs", "\uE8A4", () => OpenTextBodyEditor(true)));
