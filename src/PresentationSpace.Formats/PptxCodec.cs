@@ -35,14 +35,15 @@ public static partial class PptxCodec
     }
     private static XElement Transform(SlideShape shape)
     {
-        var b=shape.Bounds;return new(A+"xfrm",V("rot",(int)Math.Round(shape.Rotation*60000)),new XElement(A+"off",V("x",E(b.X)),V("y",E(b.Y))),new XElement(A+"ext",V("cx",E(b.Width)),V("cy",E(b.Height))));
+        var b=shape.Bounds;return new(A+"xfrm",V("rot",(int)Math.Round(shape.Rotation*60000)),
+            shape.LineDirection?.FlipHorizontal == true ? V("flipH", 1) : null, shape.LineDirection?.FlipVertical == true ? V("flipV", 1) : null,new XElement(A+"off",V("x",E(b.X)),V("y",E(b.Y))),new XElement(A+"ext",V("cx",E(b.Width)),V("cy",E(b.Height))));
     }
     private static XElement TextBody(string text,TextStyle style) => RichTextBody(new SlideShape { Text = text, TextStyle = style });
     private static XElement Shape(SlideShape s,int id)
     {
         var nonvisual=new XElement(P+"cNvPr",V("id",id),V("name",s.Name),V("descr",s.AlternativeText),V("hidden",s.Hidden?1:0));
         string geometry=s.Kind switch{ShapeKind.Ellipse=>"ellipse",ShapeKind.RoundRectangle=>"roundRect",ShapeKind.Triangle=>"triangle",ShapeKind.Diamond=>"diamond",ShapeKind.Line or ShapeKind.Arrow=>"line",_=>"rect"};
-        var outline=new XElement(A+"ln",V("w",E(s.StrokeWidth)),Fill(s.Stroke,s.Opacity));if(s.Kind==ShapeKind.Arrow)outline.Add(new XElement(A+"tailEnd",V("type","triangle")));
+        var outline=NativeOutline(s);
         return new(P+"sp",new XElement(P+"nvSpPr",nonvisual,new XElement(P+"cNvSpPr",V("txBox",s.Kind==ShapeKind.Text?1:0)),new XElement(P+"nvPr",s.Placeholder == PlaceholderKind.None ? null : Placeholder(s))),new XElement(P+"spPr",Transform(s),new XElement(A+"prstGeom",V("prst",geometry),new XElement(A+"avLst")),Fill(s.Fill,s.FillGradient,s.Opacity),outline),RichTextBody(s));
     }
     public static ExportResult Export(PresentationDocument document)
@@ -195,7 +196,7 @@ public static partial class PptxCodec
                 if(node.Name==P+"grpSp")
                 {
                     warnings.Add("Groups are imported as individually editable objects; complex group rotations are not preserved.");var x=node.Element(P+"grpSpPr")?.Element(A+"xfrm");float cx=Number(x?.Element(A+"chOff"),"x"),cy=Number(x?.Element(A+"chOff"),"y"),ex=Number(x?.Element(A+"ext"),"cx",1),ey=Number(x?.Element(A+"ext"),"cy",1),cw=Number(x?.Element(A+"chExt"),"cx",ex),ch=Number(x?.Element(A+"chExt"),"cy",ey);float nsx=sx*ex/Math.Max(1,cw),nsy=sy*ey/Math.Max(1,ch),ntx=tx+Number(x?.Element(A+"off"),"x")/Emu*sx-cx/Emu*nsx,nty=ty+Number(x?.Element(A+"off"),"y")/Emu*sy-cy/Emu*nsy;
-                    foreach(var child in node.Elements().Where(e=>e.Name==P+"sp"||e.Name==P+"pic"||e.Name==P+"grpSp"||e.Name==P+"graphicFrame"))Parse(child,ntx,nty,nsx,nsy);return;
+                    foreach(var child in node.Elements().Where(e=>e.Name==P+"sp"||e.Name==P+"pic"||e.Name==P+"cxnSp"||e.Name==P+"grpSp"||e.Name==P+"graphicFrame"))Parse(child,ntx,nty,nsx,nsy);return;
                 }
                 if(node.Name!=P+"sp"&&node.Name!=P+"pic"&&node.Name!=P+"cxnSp"&&node.Name!=P+"graphicFrame")return;
                 var properties=node.Element(P+"spPr");var xfrm=properties?.Element(A+"xfrm")??node.Element(P+"xfrm");
@@ -203,13 +204,15 @@ public static partial class PptxCodec
                 xfrm??=layoutShape?.Element(P+"spPr")?.Element(A+"xfrm")??masterShape?.Element(P+"spPr")?.Element(A+"xfrm");
                 var off=xfrm?.Elements().FirstOrDefault(e=>e.Name.LocalName=="off");var ext=xfrm?.Elements().FirstOrDefault(e=>e.Name.LocalName=="ext");var bounds=new RectF(tx+Number(off,"x",762000)/Emu*sx,ty+Number(off,"y",762000)/Emu*sy,Math.Max(1,Number(ext,"cx",9144000)/Emu*sx),Math.Max(1,Number(ext,"cy",857250)/Emu*sy));
                 var nv=node.Descendants(P+"cNvPr").FirstOrDefault();string name=(string?)nv?.Attribute("name")??"Imported object";bool hidden=(string?)nv?.Attribute("hidden") is "1" or "true";var preset=(string?)properties?.Element(A+"prstGeom")?.Attribute("prst")??"rect";
-                var kind=preset switch{"ellipse"=>ShapeKind.Ellipse,"roundRect"=>ShapeKind.RoundRectangle,"triangle"=>ShapeKind.Triangle,"diamond"=>ShapeKind.Diamond,"line"=>ShapeKind.Line,_=>ShapeKind.Rectangle};if(node.Name==P+"cxnSp")kind=ShapeKind.Line;if(properties?.Element(A+"ln")?.Element(A+"tailEnd")is not null)kind=ShapeKind.Arrow;
+                var kind=preset switch{"ellipse"=>ShapeKind.Ellipse,"roundRect"=>ShapeKind.RoundRectangle,"triangle"=>ShapeKind.Triangle,"diamond"=>ShapeKind.Diamond,"line"=>ShapeKind.Line,_=>ShapeKind.Rectangle};if(node.Name==P+"cxnSp")kind=ShapeKind.Line;
                 if((string?)node.Element(P+"nvSpPr")?.Element(P+"cNvSpPr")?.Attribute("txBox")is "1" or "true")kind=ShapeKind.Text;
                 var body=node.Element(P+"txBody");var paragraph=body?.Element(A+"lstStyle")?.Element(A+"lvl1pPr");var run=paragraph?.Element(A+"defRPr")??layoutShape?.Descendants(A+"defRPr").FirstOrDefault()??masterShape?.Descendants(A+"defRPr").FirstOrDefault();string text="";
                 var style=new TextStyle{FontSize=Math.Clamp(Number(run,"sz",2100)/75,1,512),FontFamily=(string?)run?.Element(A+"latin")?.Attribute("typeface")??"Arial",Bold=(string?)run?.Attribute("b")is "1" or "true",Italic=(string?)run?.Attribute("i")is "1" or "true",Underline=(string?)run?.Attribute("u")=="sng",Color=ReadColor(run,"#243247"),Alignment=(string?)paragraph?.Attribute("algn")switch{"ctr"=>ParagraphAlignment.Center,"r"=>ParagraphAlignment.Right,_=>ParagraphAlignment.Left},Bullets=paragraph?.Element(A+"buChar")is not null,VerticalAlignment=(string?)body?.Element(A+"bodyPr")?.Attribute("anchor")switch{"ctr"=>VerticalAlignment.Middle,"b"=>VerticalAlignment.Bottom,_=>VerticalAlignment.Top}};
+                if(kind is ShapeKind.Line or ShapeKind.Arrow) bounds=ReadLineBounds(off,ext,tx,ty,sx,sy);
                 // A sibling paragraph is never a source of inherited body defaults.
                 style=ReadParagraphStyle(paragraph,style);
                 var shape=new SlideShape{Kind=kind,Name=name,AlternativeText=(string?)nv?.Attribute("descr")??"",Placeholder=ReadPlaceholder(ph),PlaceholderIndex=Math.Max(0,(int)Number(ph,"idx")),Bounds=bounds,Hidden=hidden,Rotation=Number(xfrm,"rot")/60000,Text=text,TextStyle=style,Fill=ReadColor(properties,kind==ShapeKind.Text?"#00000000":"#D35230"),Stroke=ReadColor(properties?.Element(A+"ln"),"#00000000"),StrokeWidth=Number(properties?.Element(A+"ln"),"w",14288)/Emu};
+                if(StrokeModel.IsLine(shape))shape=shape with {LineDirection=new(PictureFlag(xfrm,"flipH"),PictureFlag(xfrm,"flipV"))};
                 shape=ReadRichText(shape,body,ReadColor);
                 if(body is not null)shape=ReadTextBox(shape,warnings,body.Element(A+"bodyPr"),layoutShape?.Element(P+"txBody")?.Element(A+"bodyPr"),masterShape?.Element(P+"txBody")?.Element(A+"bodyPr"));
                 if(node.Name==P+"pic")
@@ -249,7 +252,7 @@ public static partial class PptxCodec
                     var resolvedFill=ShapeFill(node,layoutShape,masterShape,theme,drawingColors,shape.Fill,warnings);
                     shape=shape with {Fill=resolvedFill.Color,FillGradient=resolvedFill.Gradient};
                 }
-                if (properties?.Element(A+"ln")?.Element(A+"gradFill") is not null) warnings.Add("Gradient outlines are not yet rendered.");
+                shape=ReadStroke(shape,node,layoutShape,masterShape,theme,drawingColors,warnings);
                 shapes.Add(shape);
             }
             if(tree is not null)foreach(var node in tree.Elements())Parse(node);

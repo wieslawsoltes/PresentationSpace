@@ -37,7 +37,7 @@ public sealed partial class FormatPane : SessionControl
     }
     protected override void OnSessionChanged(bool preview)
     {
-        if(_building||_committingTable||_committingPicture||_committingGradient||Session is not {} s)return;
+        if(_building||_committingTable||_committingPicture||_committingGradient||_committingOutline||Session is not {} s)return;
         if(preview&&_lastSelection==s.PrimaryShape?.Id)return;
         if(_mode==InspectorMode.Format&&ReferenceEquals(_lastShape,s.PrimaryShape)&&_lastSelection==s.PrimaryShape?.Id&&_body.Children.Count>0&&(s.PrimaryShape is not null||ReferenceEquals(_lastSlide,s.CurrentSlide)))return;
         if(_mode==InspectorMode.Format && _tableEditor is not null && s.PrimaryShape is {Kind:ShapeKind.Table} table && _lastSelection==table.Id && _lastShape?.Bounds==table.Bounds && _lastShape.Rotation==table.Rotation && _lastShape.Opacity==table.Opacity && _lastShape.AlternativeText==table.AlternativeText)
@@ -49,7 +49,7 @@ public sealed partial class FormatPane : SessionControl
         if(_building||Session is not {} s)return;_building=true;
         try
         {
-            _gradientEditor=null;_lastSlide=s.CurrentSlide;_chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_pictureEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
+            _outlineEditor=null;_outlineGradientEditor=null;_gradientEditor=null;_lastSlide=s.CurrentSlide;_chartEditor=null;_tableEditor=null;_textLayoutEditor=null;_pictureEditor=null;_body.Children.Clear();_lastSelection=s.PrimaryShape?.Id;_lastShape=s.PrimaryShape;_title.Text=_mode switch{InspectorMode.Selection=>"Selection",InspectorMode.Comments=>"Comments",_=>s.PrimaryShape is null?"Format Background":"Format Shape"};
             if(_mode==InspectorMode.Selection){BuildSelection(s);return;}if(_mode==InspectorMode.Comments){BuildComments(s);return;}
             var shape=s.PrimaryShape;
             if(shape is null){Section("Slide background");Palette(color=>s.EditSlide("Slide background",x=>x with{Background=color,BackgroundGradient=null}));BuildGradientEditor(s,null);Hint("Select an object to edit its size, position, text and appearance.");return;}
@@ -112,7 +112,7 @@ public sealed partial class FormatPane : SessionControl
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));
             NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,8,16384)}}));
             NumericPair("Rotation",shape.Rotation,v=>s.Apply("Rotation",x=>x with{Rotation=v%360}),"Opacity %",shape.Opacity*100,v=>s.Apply("Opacity",x=>x with{Opacity=Math.Clamp(v/100,0,1)}));
-            if(shape.Kind!=ShapeKind.Table){Section("Line");Palette(color=>s.Apply("Outline color",x=>x with{Stroke=color}));Number("Line width",shape.StrokeWidth,v=>s.Apply("Outline width",x=>x with{StrokeWidth=Math.Clamp(v,0,100)}));}
+            BuildOutlineEditor(s,shape);
             if(shape.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table))
             {
                 Section("Text box & paragraph layout");

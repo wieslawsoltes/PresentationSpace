@@ -5,7 +5,7 @@ using PresentationSpace.Core;
 using PresentationSpace.Rendering.Skia;
 using SkiaSharp;
 
-// This exact driver is compiled against both the immutable 0.10 baseline and the changed source in CI.
+// This exact driver is compiled against both the immutable 0.11 baseline and the changed source in CI.
 // CPU/raster benchmark, not a hardware-GPU benchmark or an end-to-end browser FPS claim.
 var results = new List<object>();
 void Measure(string name, int iterations, Action<int> work)
@@ -39,7 +39,7 @@ Measure("lookup-512-cells-in-64x64-table", 80, iteration =>
 });
 TableLayout? layoutSink = null;
 Measure("layout-64x64-table-at-changing-bounds", 80, i => layoutSink = new TableLayout(table, new(i % 10, 0, 1280, 720)));
-// Public APIs are intentionally shared with the 0.10 baseline. Warm layout and
+// Public APIs are intentionally shared with the 0.11 baseline. Warm layout and
 // first-use shaping are separate workloads; report both, not only cache hits.
 var paragraph = SlideFactory.Text(string.Join(" ", Enumerable.Repeat("Office typography: AVATAR, efficient spaces and shared measurements.", 40)), 0, 0, 620, 700, 18);
 paragraph = paragraph with { TextRanges = [new(7, 10, new() { FontSize = 25, Bold = true })] };
@@ -84,12 +84,29 @@ Measure("export-24-slides-sharing-one-picture",12,_=>repeatedPicturePptxBytes=Pr
 // layout/master/theme XML parsing instead of benchmarking unsupported old gradients.
 var importDeck = new PresentationDocument { Slides = Enumerable.Range(0, 120).Select(i => new Slide {
     LayoutName = "Title only", Shapes = [SlideFactory.Text("Slide " + i, 50, 40, 1100, 100)] }).ToImmutableArray() };
-byte[] importBytes = PresentationSpace.Formats.PptxCodec.Export(importDeck).Data;
+// The baseline writes one fixture next to its report; the current process reads
+// those exact bytes. Exporter changes must not silently change the import workload.
+string? importPath = args.Length == 0 ? null : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[0]))!, "import-source.pptx");
+byte[] importBytes;
+if (importPath is not null && File.Exists(importPath)) importBytes = File.ReadAllBytes(importPath);
+else
+{
+    importBytes = PresentationSpace.Formats.PptxCodec.Export(importDeck).Data;
+    if (importPath is not null) { Directory.CreateDirectory(Path.GetDirectoryName(importPath)!); File.WriteAllBytes(importPath, importBytes); }
+}
+string importSourceSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(importBytes));
 Measure("import-120-slides-sharing-layout-and-theme", 20, _ => sink = PresentationSpace.Formats.PptxCodec.Import(importBytes).Document);
+// Same ordinary solid-line model on both revisions; direct draws isolate
+// per-frame object/paint allocation rather than cached scene replay.
+var lineSlide = new Slide { Shapes = Enumerable.Range(0, 128).Select(i => new SlideShape {
+    Kind = ShapeKind.Line, Bounds = new(i % 16 * 80, i / 16 * 85, 60, 40), Stroke = "#243247", StrokeWidth = 3 }).ToImmutableArray() };
+var lineDeck = new PresentationDocument { Slides = [lineSlide] };
+using var lineRenderer = new SlideRenderer { EnablePictureCache = false, EnableSceneCache = false };
+Measure("draw-direct-128-solid-lines", 80, _ => lineRenderer.Render(surface.Canvas, lineDeck, lineSlide));
 GC.KeepAlive(heightSink);
 GC.KeepAlive(cellSink); GC.KeepAlive(layoutSink);
 GC.KeepAlive(sink);
-var report = new { runtime = Environment.Version.ToString(), os = Environment.OSVersion.ToString(), processorCount = Environment.ProcessorCount, repeatedPicturePptxBytes, results };
+var report = new { runtime = Environment.Version.ToString(), os = Environment.OSVersion.ToString(), processorCount = Environment.ProcessorCount, importSourceSha256, repeatedPicturePptxBytes, results };
 string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
 if (args.Length > 0) { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[0]))!); File.WriteAllText(args[0], json); }
 Console.WriteLine(json);
