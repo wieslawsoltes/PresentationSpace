@@ -12,8 +12,17 @@ public sealed partial class FormatPane
     public void FocusOutlineGradient() => _outlineGradientEditor?.FocusStops();
     private void BuildOutlineEditor(EditorSession session, SlideShape shape)
     {
-        if (!StrokeModel.Supports(shape) || session.Selection.Count != 1) return;
+        if (!StrokeModel.Supports(shape)) return;
         Section("Outline");
+        if (session.Selection.Count != 1)
+        {
+            // Keep the existing multi-selection color and width workflow without
+            // flattening each object's independent dash/arrow/gradient settings.
+            Palette(color => session.Apply("Outline color", s => StrokeModel.Supports(s) ? StrokeModel.SolidColor(s, color) : s));
+            Number("Line width", shape.StrokeWidth, width => session.Apply("Outline width", s => StrokeModel.Supports(s) ? s with { StrokeWidth = Math.Clamp(width, 0, 1000) } : s));
+            Hint("Select one object for custom dashes, arrow ends and gradient outline fields.");
+            return;
+        }
         var editor = new OutlineEditor { IsEnabled = !shape.Locked }; _outlineEditor = editor;
         var gradientEditor = new GradientFillEditor("outline-gradient") { IsEnabled = !shape.Locked }; _outlineGradientEditor = gradientEditor;
         editor.SetValue(StrokeModel.Settings(shape), StrokeModel.IsLine(shape)); gradientEditor.SetValue(StrokeModel.Resolve(shape).Gradient);
