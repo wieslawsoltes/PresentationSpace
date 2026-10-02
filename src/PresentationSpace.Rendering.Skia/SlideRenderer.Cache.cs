@@ -69,10 +69,21 @@ public sealed partial class SlideRenderer
         // Picture content is drawn directly in slide coordinates, avoiding a shape clone
         // and translation on each frame. Retained scenes never pin decoded images twice.
         if (shape.Kind == ShapeKind.Image) { DrawShape(canvas, document, shape); return; }
-        // Images are already cheap cached-image draws; do not pin decoded images in retained pictures.
-        if (!EnablePictureCache || MaximumCachedPictures <= 0 || PictureCacheBudget <= 0 || shape.Kind == ShapeKind.Image)
+        if (!EnablePictureCache || MaximumCachedPictures <= 0 || PictureCacheBudget <= 0)
         {
-            DrawShape(canvas, document, shape);
+            // Use the same local geometry and translation as recorded pictures.
+            // Absolute and translated curve coordinates can rasterize differently
+            // after rotation. Plain lines accept a bounds override, avoiding a
+            // positional shape allocation without changing their coordinate frame.
+            var local = new RectF(0, 0, shape.Bounds.Width, shape.Bounds.Height);
+            canvas.Save();
+            try
+            {
+                canvas.Translate(shape.Bounds.X, shape.Bounds.Y);
+                if (StrokeModel.IsLine(shape) && string.IsNullOrEmpty(shape.Text)) DrawLineCore(canvas, shape, local);
+                else DrawShape(canvas, document, shape with { Bounds = local });
+            }
+            finally { canvas.Restore(); }
             return;
         }
         SKPicture? picture = null;

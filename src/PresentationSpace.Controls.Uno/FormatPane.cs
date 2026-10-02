@@ -110,7 +110,7 @@ public sealed partial class FormatPane : SessionControl
             BuildGradientEditor(s,shape);
             Section("Size & position");
             NumericPair("X",shape.Bounds.X,v=>s.Apply("Position X",x=>x with{Bounds=x.Bounds with{X=v}}),"Y",shape.Bounds.Y,v=>s.Apply("Position Y",x=>x with{Bounds=x.Bounds with{Y=v}}));
-            NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,8,16384)}}));
+            NumericPair("Width",shape.Bounds.Width,v=>s.Apply("Width",x=>x with{Bounds=x.Bounds with{Width=Math.Clamp(v,StrokeModel.IsLine(x)?0:8,16384)}}),"Height",shape.Bounds.Height,v=>s.Apply("Height",x=>x with{Bounds=x.Bounds with{Height=Math.Clamp(v,StrokeModel.IsLine(x)?0:8,16384)}}));
             NumericPair("Rotation",shape.Rotation,v=>s.Apply("Rotation",x=>x with{Rotation=v%360}),"Opacity %",shape.Opacity*100,v=>s.Apply("Opacity",x=>x with{Opacity=Math.Clamp(v/100,0,1)}));
             BuildOutlineEditor(s,shape);
             if(shape.Kind is not (ShapeKind.Image or ShapeKind.Chart or ShapeKind.Table))

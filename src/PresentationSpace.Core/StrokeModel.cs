@@ -112,7 +112,11 @@ public static class StrokeModel
     public static (PointF Start, PointF End) Endpoints(SlideShape shape)
     {
         if (!IsLine(shape)) throw new ArgumentException("Line geometry requires Line or Arrow.", nameof(shape));
-        var b = shape.Bounds; var direction = shape.LineDirection;
+        return Endpoints(shape.Bounds, shape.LineDirection);
+    }
+    /// <summary>Resolve the same line direction in another coordinate frame without cloning a shape.</summary>
+    public static (PointF Start, PointF End) Endpoints(RectF b, LineDirection? direction)
+    {
         return (new(direction?.FlipHorizontal == true ? b.Right : b.X, direction?.FlipVertical == true ? b.Bottom : b.Y),
             new(direction?.FlipHorizontal == true ? b.X : b.Right, direction?.FlipVertical == true ? b.Y : b.Bottom));
     }

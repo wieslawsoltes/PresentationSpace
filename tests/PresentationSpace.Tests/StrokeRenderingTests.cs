@@ -59,6 +59,15 @@ public sealed class StrokeRenderingTests
         var s=Line() with {Rotation=13,Outline=new() {Dash=StrokeDash.Dot,Gradient=GradientSample.Preset("Sunset"),End=new() {Kind=LineEndKind.Triangle}}};
         using var r=new SlideRenderer();using var cached=Draw(r,s);using var direct=Draw(r,s,false);Assert.Equal(cached.Pixels,direct.Pixels);
     }
+    [Theory] [InlineData(ShapeKind.Ellipse)] [InlineData(ShapeKind.RoundRectangle)] [InlineData(ShapeKind.Triangle)] [InlineData(ShapeKind.Diamond)] [InlineData(ShapeKind.Line)] [InlineData(ShapeKind.Arrow)]
+    public void FractionalRotatedGradientGeometryMatchesAcrossCacheModes(ShapeKind kind)
+    {
+        var s=Line() with {Kind=kind,Bounds=new(21.75f,20.125f,157.375f,69.5f),Rotation=23.75f,
+            Fill="#FFFFFF",FillGradient=GradientSample.Preset("Ocean"),Outline=new() {Cap=StrokeCap.Square,Dash=StrokeDash.DashDot,
+                Gradient=GradientSample.Preset("Violet"),Join=StrokeJoin.Miter,End=new() {Kind=LineEndKind.Triangle}},LineDirection=null};
+        using var r=new SlideRenderer();using var cached=Draw(r,s);using var direct=Draw(r,s,false);
+        Assert.Equal(cached.Pixels,direct.Pixels);
+    }
     [Fact] public void StrokeResourcesEvictReleaseAndRecreateSafely()
     {
         using var b=new SKBitmap(220,120);using var c=new SKCanvas(b);using var r=new SlideRenderer {MaximumCachedStrokePatterns=3};

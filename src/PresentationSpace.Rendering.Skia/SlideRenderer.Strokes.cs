@@ -33,7 +33,7 @@ public sealed partial class SlideRenderer
             first.Value.Effect.Dispose(); _dashLru.RemoveFirst();
         }
     }
-    private void ConfigureStroke(SKPaint paint, SlideShape shape)
+    private void ConfigureStroke(SKPaint paint, SlideShape shape, RectF? localBounds = null)
     {
         var style = StrokeModel.Resolve(shape);
         paint.PathEffect = null;
@@ -42,7 +42,8 @@ public sealed partial class SlideRenderer
         paint.StrokeJoin = style.Join switch { StrokeJoin.Bevel => SKStrokeJoin.Bevel, StrokeJoin.Miter => SKStrokeJoin.Miter, _ => SKStrokeJoin.Round };
         paint.StrokeMiter = style.MiterLimit;
         // Degenerate line extents are valid DrawingML; a gradient still needs a finite fill box.
-        var box = shape.Bounds with { Width = Math.Max(1, shape.Bounds.Width), Height = Math.Max(1, shape.Bounds.Height) };
+        var bounds = localBounds ?? shape.Bounds;
+        var box = bounds with { Width = Math.Max(1, bounds.Width), Height = Math.Max(1, bounds.Height) };
         ConfigureFill(paint, shape.Stroke, style.Gradient, box, shape.Rotation);
         int maximum = Math.Max(0, MaximumCachedStrokePatterns); long budget = Math.Max(0, StrokePatternCacheBudget);
         TrimDashes(maximum, budget);
@@ -78,14 +79,14 @@ public sealed partial class SlideRenderer
         StrokeModel.Validate(StrokeModel.Settings(shape));
         DrawLineCore(canvas, shape);
     }
-    private void DrawLineCore(SKCanvas canvas, SlideShape shape)
+    private void DrawLineCore(SKCanvas canvas, SlideShape shape, RectF? localBounds = null)
     {
         if (shape.StrokeWidth <= 0) return; // Zero width means no outline, never a Skia hairline.
-        var (start, end) = StrokeModel.Endpoints(shape);
+        var (start, end) = StrokeModel.Endpoints(localBounds ?? shape.Bounds, shape.LineDirection);
         float dx = end.X - start.X, dy = end.Y - start.Y, length = MathF.Sqrt(dx * dx + dy * dy);
         if (!float.IsFinite(length) || !float.IsFinite(start.X) || !float.IsFinite(start.Y) || !float.IsFinite(end.X) || !float.IsFinite(end.Y))
             throw new ArgumentException("Line coordinates must be finite.", nameof(shape));
-        var paint = _linePaint ??= new SKPaint(); ConfigureStroke(paint, shape);
+        var paint = _linePaint ??= new SKPaint(); ConfigureStroke(paint, shape, localBounds);
         var style = StrokeModel.Resolve(shape);
         try
         {
@@ -105,7 +106,7 @@ public sealed partial class SlideRenderer
                 canvas.DrawLine(start.X + dx * first, start.Y + dy * first, end.X - dx * last, end.Y - dy * last, paint);
             var markerPaint = _markerPaint ??= new SKPaint { IsAntialias = true };
             // End decorations are solid geometry even when the shaft is dashed.
-            ConfigureStroke(markerPaint, shape); markerPaint.PathEffect = null;
+            ConfigureStroke(markerPaint, shape, localBounds); markerPaint.PathEffect = null;
             try
             {
                 DrawLineEnd(canvas, start, -dx, -dy, style.Begin, shape.StrokeWidth, markerPaint);

@@ -7,7 +7,7 @@
 - Fix closed shapes misclassified as arrows merely because `tailEnd` is present. Import supported grouped connectors rather than silently dropping them; connector attachment/routing is still not retained.
 - Resolve sparse direct/layout/master outlines and theme line references with supported placeholder colors, fill transforms and explicit no-fill. Preserve native dash, cap, join, marker, width and gradient definitions; warn on unsupported compound/inset styles.
 - Add reusable explicit-apply `OutlineEditor`, independent outline-gradient authoring, ribbon/search commands, append-only sample and diagnostics. Stale/locked drafts cannot partially commit; solid outline colors clear gradient overrides.
-- Reuse direct-line paints and bounded O(1) dash effects. Remove uncached positional shape clones and include all stroke/direction state in retained-picture invalidation.
+- Reuse direct-line paints and bounded O(1) dash effects. Remove uncached positional line clones while retaining the local coordinate frame, and include all stroke/direction state in retained-picture invalidation.
 - Add model, native schema/interchange, pixel/resource and real-input browser regressions. Extend identical-driver benchmarks with direct solid lines and byte-identical cross-version import fixtures.
 - New native properties require schema 9; schemas 1–8 remain readable. Compound/inset strokes, arbitrary connector paths and exact native Office marker sizing remain outside the implemented subset.
 
